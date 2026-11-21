@@ -226,6 +226,10 @@ ARCANA "stats" {
 }
 ```
 
+## Syntax showcase
+
+`scripts/syntax_test.obl` is a compile-checked file that exercises every statement family: arithmetic and bitwise binds, string constants, memory reveal and scribe, immediate stores, stack operations, every conditional gate, labels, calls, returns, halt, nop and host calls. Its oracles are not named after server events, so loading the file does not run any of them.
+
 ## Configuration
 
 ```properties

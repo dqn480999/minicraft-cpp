@@ -99,7 +99,7 @@ ARCANA "welcome" {
 }
 ```
 
-The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). Disable scripting with `scripts-enabled=false`.
+The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). A compile-checked syntax showcase is in `scripts/syntax_test.obl`. Disable scripting with `scripts-enabled=false`.
 
 ## Configuration
 

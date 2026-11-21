@@ -1,0 +1,87 @@
+ARCANA "syntax_test" {
+    ORACLE @arithmetic ~> {
+        BIND($r0) ::= #-42;
+        BIND($r1) ::= $r0;
+        BIND($r2) ::= SIGIL("literal");
+        BIND($r3) ::= $r0 <+> $r1;
+        BIND($r3) ::= $r3 <-> #1;
+        BIND($r3) ::= $r3 <*> #2;
+        BIND($r3) ::= $r3 </> #2;
+        BIND($r3) ::= $r3 <%> #7;
+        BIND($r3) ::= $r3 <&> #255;
+        BIND($r3) ::= $r3 <|> #1;
+        BIND($r3) ::= $r3 <^> #3;
+        BIND($r3) ::= $r3 <<> #1;
+        BIND($r3) ::= $r3 <>> #1;
+        BIND($r0) ::= $a0 <+> $a1;
+        RETURN;
+    }
+
+    ORACLE @memory ~> {
+        BIND($r4) ::= #0;
+        SCRIBE MEM[$r4 + #0] ::= $a0;
+        SCRIBE MEM[$r4 + #8] ::= #99;
+        REVEAL($r5) ::= MEM[$r4 + #0];
+        REVEAL($r6) ::= MEM[$r4 + #8];
+        PUSH($r5);
+        POP($r6);
+        HALT;
+    }
+
+    ORACLE @conditions ~> {
+        BIND($r0) ::= $a0;
+        VERIFY($r0) <=> $a1;
+        WHEN::EQUAL => GATE @equal;
+        WHEN::NOT_EQUAL => GATE @not_equal;
+        WHEN::LESS => GATE @less;
+        WHEN::GREATER => GATE @greater;
+        WHEN::LESS_OR_EQUAL => GATE @less_equal;
+        WHEN::GREATER_OR_EQUAL => GATE @greater_equal;
+        WHEN::ZERO => GATE @zero;
+        WHEN::NONZERO => GATE @nonzero;
+        GATE @done;
+        @equal::
+        GATE @done;
+        @not_equal::
+        GATE @done;
+        @less::
+        GATE @done;
+        @greater::
+        GATE @done;
+        @less_equal::
+        GATE @done;
+        @greater_equal::
+        GATE @done;
+        @zero::
+        GATE @done;
+        @nonzero::
+        GATE @done;
+        @done::
+        HALT;
+    }
+
+    ORACLE @calls ~> {
+        BIND($r0) ::= #0;
+        CALL @helper;
+        CALL @arithmetic;
+        HALT;
+        @helper::
+        NOP;
+        BIND($r0) ::= $r0 <+> #1;
+        RETURN;
+    }
+
+    ORACLE @host_calls ~> {
+        BIND($a0) ::= SIGIL("&aOBLVN syntax test");
+        BIND($a1) ::= #1;
+        BIND($a2) ::= #2;
+        BIND($a3) ::= #3;
+        SUMMON(#1);
+        SUMMON(#2);
+        SUMMON(#3);
+        SUMMON(#4);
+        SUMMON(#5);
+        SUMMON(#7);
+        HALT;
+    }
+}
