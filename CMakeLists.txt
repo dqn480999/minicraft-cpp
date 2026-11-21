@@ -1,0 +1,64 @@
+cmake_minimum_required(VERSION 3.20)
+project(minicraft_cpp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+
+find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(CURL)
+
+add_library(minicraft_core STATIC
+    src/common/Log.cpp
+    src/common/Config.cpp
+    src/common/Json.cpp
+    src/common/Crypto.cpp
+    src/common/Uuid.cpp
+    src/common/ThreadPool.cpp
+    src/net/ByteBuffer.cpp
+    src/net/Zlib.cpp
+    src/net/Encryption.cpp
+    src/net/Connection.cpp
+    src/net/EventLoop.cpp
+    src/net/TcpServer.cpp
+    src/protocol/Chat.cpp
+    src/protocol/Auth.cpp
+    src/protocol/ItemStack.cpp
+    src/world/Chunk.cpp
+    src/world/World.cpp
+    src/server/PlayerManager.cpp
+    src/server/CommandManager.cpp
+    src/server/Server.cpp
+)
+
+target_include_directories(minicraft_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_options(minicraft_core PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+target_link_libraries(minicraft_core PUBLIC Threads::Threads ZLIB::ZLIB OpenSSL::Crypto)
+
+if(CURL_FOUND)
+    target_compile_definitions(minicraft_core PUBLIC MINICRAFT_HAVE_CURL=1)
+    if(TARGET CURL::libcurl)
+        target_link_libraries(minicraft_core PUBLIC CURL::libcurl)
+    else()
+        target_link_libraries(minicraft_core PUBLIC ${CURL_LIBRARIES})
+        target_include_directories(minicraft_core PUBLIC ${CURL_INCLUDE_DIRS})
+    endif()
+endif()
+
+add_executable(minicraft src/main.cpp)
+target_link_libraries(minicraft PRIVATE minicraft_core)
+
+option(MINICRAFT_BUILD_PROBE "Build the protocol probe client" ON)
+if(MINICRAFT_BUILD_PROBE)
+    add_executable(probe tests/probe.cpp)
+    target_link_libraries(probe PRIVATE minicraft_core)
+
+    add_executable(core_test tests/core_test.cpp)
+    target_link_libraries(core_test PRIVATE minicraft_core OpenSSL::Crypto)
+endif()

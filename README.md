@@ -1,0 +1,134 @@
+# Minicraft C++ Server
+
+Experimental Minecraft Java 1.8.9 server core (protocol 47) written in C++20.
+
+The project implements the network protocol, world storage, inventory, survival mechanics, mobs and a small generated village without a Minecraft server dependency.
+
+## Features
+
+- epoll networking with multiple I/O threads and `SO_REUSEPORT`
+- handshake, status, legacy ping, login (offline and Mojang online mode)
+- zlib packet compression and AES-128/CFB8 encryption
+- flat world with saved modified chunks and player data
+- chunk streaming, block placement and breaking
+- inventory, cursor, held item, item drops and pickup
+- survival: health, hunger, regeneration, fall/lava/drowning/starvation damage, death and respawn
+- falling sand and gravel
+- water and lava spread
+- daylight and block light calculation
+- passive mobs, villagers and a generated village
+- chat colors and permission commands
+- autosave and server log file
+
+## Requirements
+
+- Linux (epoll)
+- CMake 3.20 or newer
+- Ninja or Make
+- C++20 compiler (GCC 11+ or Clang 14+)
+- zlib
+- OpenSSL
+- libcurl (optional, required for `online-mode=true`)
+- pthreads
+
+Ubuntu / Debian:
+
+```bash
+sudo apt install build-essential cmake ninja-build zlib1g-dev libssl-dev libcurl4-openssl-dev
+```
+
+## Build
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+## Run
+
+```bash
+./build/minicraft --config config/server.properties --port 25566
+```
+
+The default port in `config/server.properties` is `25565`. Use `--port` if that port is already occupied.
+
+Runtime files are created in the working directory:
+
+- `server.log` — server log
+- `world/` — saved chunks
+- `playerdata/` — saved player state
+- `ops.txt` — operators added at runtime
+
+## Test
+
+The probe client connects to a running server and checks status, login, chunks, inventory actions, drops, pickup, sand, fluids, damage, respawn, mobs and eating.
+
+```bash
+./build/probe 127.0.0.1 25566 TestBot
+```
+
+Unit tests:
+
+```bash
+./build/core_test
+```
+
+The test profile uses faster hunger/time settings:
+
+```bash
+./build/minicraft --config config/test.properties --port 25566
+./build/probe 127.0.0.1 25566 TestBot
+```
+
+## Configuration
+
+`config/server.properties` contains the main settings. Important options:
+
+- `port`, `host`, `online-mode`
+- `max-players`, `view-distance`
+- `gamemode`, `difficulty`, `motd`
+- `compression-threshold`
+- `io-threads`
+- `ops`, `ops-file`, `name-replace`
+- `world-save`, `world-dir`
+- `player-data`, `player-data-dir`
+- `item-drops`, `item-pickup-delay-ms`, `item-pickup-radius`
+- `sand-physics`, `fluids-enabled`, `fluid-tick-interval`
+- `hunger-interval-seconds`, `time-scale`
+- `autosave-seconds`
+- `log-file`
+
+## Commands
+
+Player and console commands:
+
+```text
+/help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop
+/op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood
+```
+
+Administrative commands require operator status. The console always has operator access.
+
+## Project layout
+
+```text
+src/common      logging, config, JSON, crypto, UUID, thread pool
+src/net         buffers, compression, encryption, connections, epoll loops
+src/protocol    chat, authentication, item stacks
+src/world       blocks, chunks, world, persistence
+src/server      server, players, commands, mobs, entities
+tests           probe client and unit tests
+config          server and test profiles
+```
+
+## Limitations
+
+- Minecraft Java 1.8.9 only
+- no full player physics or movement anti-cheat
+- simple mob AI without pathfinding or hostile spawning
+- one generated village at a fixed location
+- no crafting, armor effects or tool durability
+- item NBT is not persisted
+- light does not propagate across chunk boundaries
+- fluids do not recede after removing a source
+- no whitelist, ban list or TPS metrics

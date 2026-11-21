@@ -1,0 +1,12 @@
+build/
+build-*/
+world/
+world-test/
+playerdata/
+playerdata-test/
+*.log
+ops.txt
+ops-test.txt
+.DS_Store
+*.swp
+*.tmp
