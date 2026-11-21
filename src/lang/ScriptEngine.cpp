@@ -11,13 +11,15 @@
 
 #include "common/Log.hpp"
 #include "lang/Compiler.hpp"
+#include "lang/Disassembler.hpp"
 #include "server/Server.hpp"
 #include "world/Blocks.hpp"
 
 namespace mc {
 
-ScriptEngine::ScriptEngine(Server& server)
-    : server_(server) {
+ScriptEngine::ScriptEngine(Server& server, ScriptOptions options)
+    : server_(server)
+    , options_(options) {
 }
 
 bool ScriptEngine::loadDirectory(const std::string& directory) {
@@ -82,8 +84,12 @@ bool ScriptEngine::loadDirectory(const std::string& directory) {
             success = false;
             continue;
         }
+        if (options_.disassemble) {
+            Log::debug("script disassembly:\n{}", lang::disassemble(program));
+        }
         functionCount_ += program.functions.size();
         programs_.push_back(std::move(program));
+        memories_.push_back(std::vector<lang::Word>(lang::kMemoryCellCount, 0));
         ++loaded;
     }
 
@@ -96,6 +102,7 @@ bool ScriptEngine::loadDirectory(const std::string& directory) {
 bool ScriptEngine::reload(const std::string& directory) {
     std::lock_guard lock(mutex_);
     programs_.clear();
+    memories_.clear();
     functionCount_ = 0;
     return loadDirectory(directory);
 }
@@ -104,7 +111,8 @@ void ScriptEngine::fire(const std::string& event,
                         const std::vector<lang::Word>& arguments,
                         const std::vector<std::string>& runtimeStrings) {
     std::lock_guard lock(mutex_);
-    for (const auto& program : programs_) {
+    for (std::size_t index = 0; index < programs_.size(); ++index) {
+        const lang::Program& program = programs_[index];
         if (!program.functions.contains(event)) {
             continue;
         }
@@ -114,9 +122,10 @@ void ScriptEngine::fire(const std::string& event,
             callArguments.push_back(100000 + static_cast<lang::Word>(i));
         }
         callArguments.insert(callArguments.end(), arguments.begin(), arguments.end());
-        lang::VirtualMachine vm(program, *this);
+        lang::VirtualMachine vm(program, *this, memories_[index]);
+        vm.setTrace(options_.trace);
         std::string error;
-        if (!vm.run(event, callArguments, runtimeStrings, error)) {
+        if (!vm.run(event, callArguments, runtimeStrings, error, options_.maxInstructions)) {
             Log::error("script error: {}", error);
         }
     }
@@ -163,6 +172,10 @@ void ScriptEngine::setBlock(lang::Word x, lang::Word y, lang::Word z, lang::Word
 
 void ScriptEngine::logInteger(lang::Word value) {
     Log::info("[script] {}", value);
+}
+
+void ScriptEngine::traceLine(std::string_view text) {
+    Log::debug("script trace: {}", text);
 }
 
 }

@@ -87,7 +87,7 @@ The test profile uses faster hunger/time settings:
 
 ## Scripting
 
-OBLVN is a low-level register language compiled to bytecode and executed by the server core. Scripts in `scripts/*.obl` can handle `on_join`, `on_leave`, `on_chat`, `on_block_break`, `on_block_place`, `on_death`, `on_command` and `on_tick`. They have 16 registers, 4096 memory cells, a 256-entry stack, conditional gates, native calls for chat, player counts, time and block access, and a fixed instruction limit. Operators can hot reload scripts with `/script reload` or dispatch an oracle with `/script run <oracle>`.
+OBLVN is a low-level register language compiled to bytecode and executed by the server core. Scripts in `scripts/*.obl` can handle `on_join`, `on_leave`, `on_chat`, `on_block_break`, `on_block_place`, `on_death`, `on_command` and `on_tick`. They have 16 registers, persistent 4096-cell memory, byte and word memory access, indirect addressing, separate data and call stacks, carry and overflow flags, conditional gates, native calls for chat, player counts, time and block access, and a configurable instruction limit. Operators can hot reload scripts with `/script reload` or dispatch an oracle with `/script run <oracle>`.
 
 ```obl
 ARCANA "welcome" {
@@ -120,6 +120,7 @@ The syntax reference, instruction set, host calls, event arguments and limits ar
 - `hunger-interval-seconds`, `time-scale`
 - `autosave-seconds`
 - `scripts-enabled`, `script-dir`, `script-tick-interval-ms`
+- `script-max-instructions`, `script-trace`, `script-disassemble`
 - `log-file`
 
 ## Commands

@@ -55,6 +55,9 @@ struct ServerConfig {
     bool scriptsEnabled{true};
     std::string scriptDir{"scripts"};
     int scriptTickIntervalMs{1000};
+    int scriptMaxInstructions{200000};
+    bool scriptTrace{false};
+    bool scriptDisassemble{false};
     bool debug{false};
     bool color{true};
     std::string listenerName{"minicraft"};

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <openssl/evp.h>
@@ -15,6 +16,7 @@
 #include "common/Json.hpp"
 #include "common/Uuid.hpp"
 #include "lang/Compiler.hpp"
+#include "lang/Disassembler.hpp"
 #include "lang/Vm.hpp"
 #include "protocol/Chat.hpp"
 #include "protocol/ItemStack.hpp"
@@ -288,6 +290,9 @@ public:
         integers.push_back(value);
     }
 
+    void traceLine(std::string_view) override {
+    }
+
     std::vector<mc::lang::Word> integers;
     std::vector<std::string> texts;
 };
@@ -318,6 +323,50 @@ ARCANA "test" {
         BIND($r0) ::= $r0 <+> $r1;
         RETURN;
     }
+
+    ORACLE @persist ~> {
+        BIND($r0) ::= #0;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        INCREMENT($r1);
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        BIND($a0) ::= $r1;
+        SUMMON(#1);
+        RETURN;
+    }
+
+    ORACLE @bytes ~> {
+        BIND($r0) ::= #2;
+        BIND($r3) ::= #0;
+        BIND($r1) ::= #300;
+        SCRIBE8 MEM8[$r0 + #0] ::= $r1;
+        REVEAL8($r2) ::= MEM8[$r0 + $r3];
+        BIND($a0) ::= $r2;
+        SUMMON(#1);
+        RETURN;
+    }
+
+    ORACLE @flags ~> {
+        BIND($r0) ::= #9223372036854775807;
+        INCREMENT($r0);
+        WHEN::OVERFLOW => GATE @overflow;
+        GATE @done;
+        @overflow::
+        BIND($a0) ::= #1;
+        SUMMON(#1);
+        @done::
+        BIND($r1) ::= #5;
+        BIND($r2) ::= #9;
+        SWAP($r1, $r2);
+        BIND($a0) ::= $r1;
+        SUMMON(#1);
+        NEGATE($r2);
+        BIND($a0) ::= $r2;
+        SUMMON(#1);
+        COMPLEMENT($r2);
+        BIND($a0) ::= $r2;
+        SUMMON(#1);
+        RETURN;
+    }
 }
 )OBL";
     mc::lang::Program program;
@@ -330,12 +379,26 @@ ARCANA "test" {
             program.code[patch.instruction].imm = static_cast<mc::lang::Word>(target->second);
         }
     }
+    expect(mc::lang::disassemble(program).find("MOV") != std::string::npos, "language disassembler");
     ScriptProbe host;
-    mc::lang::VirtualMachine vm(program, host);
+    std::vector<mc::lang::Word> memory(mc::lang::kMemoryCellCount, 0);
+    mc::lang::VirtualMachine vm(program, host, memory);
     expect(vm.run("main", {}, {}, error), "language run " + error);
-    expect(host.integers.size() == 2 && host.integers[0] == 6 && host.integers[1] == 55,
-           "language arithmetic and memory");
+    expect(vm.run("persist", {}, {}, error), "language persist first " + error);
+    expect(vm.run("persist", {}, {}, error), "language persist second " + error);
+    expect(vm.run("bytes", {}, {}, error), "language byte memory " + error);
+    expect(vm.run("flags", {}, {}, error), "language flags " + error);
+    expect(host.integers.size() == 9, "language host count");
+    if (host.integers.size() == 9) {
+        expect(host.integers[0] == 6 && host.integers[1] == 55, "language arithmetic");
+        expect(host.integers[2] == 1 && host.integers[3] == 2, "language persistent memory");
+        expect(host.integers[4] == 44, "language byte memory");
+        expect(host.integers[5] == 1, "language overflow flag");
+        expect(host.integers[6] == 9 && host.integers[7] == -5, "language swap and negate");
+        expect(host.integers[8] == 4, "language complement");
+    }
     expect(host.texts.size() == 1 && host.texts[0] == "done", "language string table");
+    expect(memory[0] == 2 && memory[2] == 44, "language memory state");
 }
 
 void testWorldPersistence() {

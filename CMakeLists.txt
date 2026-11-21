@@ -35,6 +35,7 @@ set(MINICRAFT_CORE_SOURCES
     src/world/World.cpp
     src/lang/Lexer.cpp
     src/lang/Compiler.cpp
+    src/lang/Disassembler.cpp
     src/lang/Vm.cpp
     src/lang/ScriptEngine.cpp
     src/server/PlayerManager.cpp

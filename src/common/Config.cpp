@@ -197,6 +197,12 @@ bool Config::applyLine(ServerConfig& config, std::string_view line) {
         config.scriptDir = value;
     } else if (key == "script-tick-interval-ms") {
         config.scriptTickIntervalMs = clampInt(parseInt(value, config.scriptTickIntervalMs), 100, 3600000);
+    } else if (key == "script-max-instructions") {
+        config.scriptMaxInstructions = clampInt(parseInt(value, config.scriptMaxInstructions), 1000, 10000000);
+    } else if (key == "script-trace") {
+        config.scriptTrace = parseBool(value, config.scriptTrace);
+    } else if (key == "script-disassemble") {
+        config.scriptDisassemble = parseBool(value, config.scriptDisassemble);
     } else if (key == "debug") {
         config.debug = parseBool(value, config.debug);
     } else if (key == "color") {

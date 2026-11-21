@@ -18,6 +18,12 @@ struct Operand {
     Word value{0};
 };
 
+struct Address {
+    std::uint8_t base{0};
+    std::uint8_t index{kNoIndex};
+    Word offset{0};
+};
+
 struct JumpPatch {
     std::size_t instruction{0};
     std::string label;
@@ -27,6 +33,26 @@ struct LocalCall {
     std::size_t instruction{0};
     std::string name;
 };
+
+std::string tokenText(const Token& token) {
+    switch (token.kind) {
+    case TokenKind::End:
+        return "end of file";
+    case TokenKind::Identifier:
+        return "identifier " + token.text;
+    case TokenKind::Register:
+        return "register $" + token.text;
+    case TokenKind::Label:
+        return "label @" + token.text;
+    case TokenKind::Number:
+        return "number #" + token.text;
+    case TokenKind::String:
+        return "string literal";
+    case TokenKind::Symbol:
+        return "'" + token.text + "'";
+    }
+    return "token";
+}
 
 class Parser {
 public:
@@ -39,13 +65,13 @@ public:
     bool parse(std::string& error) {
         while (!check(TokenKind::End)) {
             if (!expectIdentifier("ARCANA")) {
-                return fail(error, "expected ARCANA");
+                return fail(error, "expected ARCANA, got " + tokenText(current()));
             }
             if (!expect(TokenKind::String)) {
-                return fail(error, "expected arcana name");
+                return fail(error, "expected arcana name, got " + tokenText(current()));
             }
             if (!expectSymbol("{")) {
-                return fail(error, "expected {");
+                return fail(error, "expected {, got " + tokenText(current()));
             }
             while (!checkSymbol("}") && !check(TokenKind::End)) {
                 if (!parseOracle(error)) {
@@ -53,7 +79,7 @@ public:
                 }
             }
             if (!expectSymbol("}")) {
-                return fail(error, "expected }");
+                return fail(error, "expected }, got " + tokenText(current()));
             }
         }
         return true;
@@ -62,20 +88,20 @@ public:
 private:
     bool parseOracle(std::string& error) {
         if (!expectIdentifier("ORACLE")) {
-            return fail(error, "expected ORACLE");
+            return fail(error, "expected ORACLE, got " + tokenText(current()));
         }
         if (!expect(TokenKind::Label)) {
-            return fail(error, "expected oracle name");
+            return fail(error, "expected oracle name, got " + tokenText(current()));
         }
         const std::string name = previous().text;
         if (program_.functions.contains(name)) {
             return fail(error, "duplicate oracle " + name);
         }
         if (!expectSymbol("~>")) {
-            return fail(error, "expected ~>");
+            return fail(error, "expected ~>, got " + tokenText(current()));
         }
         if (!expectSymbol("{")) {
-            return fail(error, "expected {");
+            return fail(error, "expected {, got " + tokenText(current()));
         }
 
         program_.functions[name] = program_.code.size();
@@ -89,7 +115,7 @@ private:
             }
         }
         if (!expectSymbol("}")) {
-            return fail(error, "expected }");
+            return fail(error, "expected }, got " + tokenText(current()));
         }
 
         for (const auto& patch : jumps_) {
@@ -124,17 +150,23 @@ private:
             return fail(error, "unexpected end of file");
         }
         if (!check(TokenKind::Identifier)) {
-            return fail(error, "expected statement");
+            return fail(error, "expected statement, got " + tokenText(current()));
         }
         const std::string keyword = current().text;
         if (keyword == "BIND") {
             return parseBind(error);
         }
         if (keyword == "REVEAL") {
-            return parseReveal(error);
+            return parseReveal(error, false);
+        }
+        if (keyword == "REVEAL8") {
+            return parseReveal(error, true);
         }
         if (keyword == "SCRIBE") {
-            return parseScribe(error);
+            return parseScribe(error, false);
+        }
+        if (keyword == "SCRIBE8") {
+            return parseScribe(error, true);
         }
         if (keyword == "VERIFY") {
             return parseVerify(error);
@@ -151,25 +183,19 @@ private:
         if (keyword == "RETURN") {
             advance();
             if (!expectSymbol(";")) {
-                return fail(error, "expected ;");
+                return fail(error, "expected ;, got " + tokenText(current()));
             }
             emit(Op::Ret);
             return true;
         }
         if (keyword == "PUSH" || keyword == "POP") {
             advance();
-            if (!expectSymbol("(")) {
-                return fail(error, "expected (");
-            }
-            const auto reg = parseRegister();
+            const auto reg = parseParenthesizedRegister(error);
             if (!reg) {
-                return fail(error, "expected register");
-            }
-            if (!expectSymbol(")")) {
-                return fail(error, "expected )");
+                return false;
             }
             if (!expectSymbol(";")) {
-                return fail(error, "expected ;");
+                return fail(error, "expected ;, got " + tokenText(current()));
             }
             Instruction instruction;
             instruction.op = keyword == "PUSH" ? Op::Push : Op::Pop;
@@ -177,20 +203,72 @@ private:
             emit(instruction);
             return true;
         }
+        if (keyword == "NEGATE" || keyword == "COMPLEMENT" || keyword == "INCREMENT" || keyword == "DECREMENT") {
+            advance();
+            const auto reg = parseParenthesizedRegister(error);
+            if (!reg) {
+                return false;
+            }
+            if (!expectSymbol(";")) {
+                return fail(error, "expected ;, got " + tokenText(current()));
+            }
+            Instruction instruction;
+            instruction.dst = *reg;
+            if (keyword == "NEGATE") {
+                instruction.op = Op::Neg;
+            } else if (keyword == "COMPLEMENT") {
+                instruction.op = Op::Not;
+            } else if (keyword == "INCREMENT") {
+                instruction.op = Op::Inc;
+            } else {
+                instruction.op = Op::Dec;
+            }
+            emit(instruction);
+            return true;
+        }
+        if (keyword == "SWAP") {
+            advance();
+            if (!expectSymbol("(")) {
+                return fail(error, "expected (, got " + tokenText(current()));
+            }
+            const auto left = parseRegister();
+            if (!left) {
+                return fail(error, "expected register");
+            }
+            if (!expectSymbol(",")) {
+                return fail(error, "expected , got " + tokenText(current()));
+            }
+            const auto right = parseRegister();
+            if (!right) {
+                return fail(error, "expected register");
+            }
+            if (!expectSymbol(")")) {
+                return fail(error, "expected ), got " + tokenText(current()));
+            }
+            if (!expectSymbol(";")) {
+                return fail(error, "expected ;, got " + tokenText(current()));
+            }
+            Instruction instruction;
+            instruction.op = Op::Swap;
+            instruction.dst = *left;
+            instruction.src = *right;
+            emit(instruction);
+            return true;
+        }
         if (keyword == "SUMMON") {
             advance();
             if (!expectSymbol("(")) {
-                return fail(error, "expected (");
+                return fail(error, "expected (, got " + tokenText(current()));
             }
             const auto id = parseNumber();
             if (!id) {
                 return fail(error, "expected host id");
             }
             if (!expectSymbol(")")) {
-                return fail(error, "expected )");
+                return fail(error, "expected ), got " + tokenText(current()));
             }
             if (!expectSymbol(";")) {
-                return fail(error, "expected ;");
+                return fail(error, "expected ;, got " + tokenText(current()));
             }
             Instruction instruction;
             instruction.op = Op::Host;
@@ -198,10 +276,31 @@ private:
             emit(instruction);
             return true;
         }
+        if (keyword == "TRAP") {
+            advance();
+            if (!expectSymbol("(")) {
+                return fail(error, "expected (, got " + tokenText(current()));
+            }
+            const auto code = parseNumber();
+            if (!code) {
+                return fail(error, "expected trap code");
+            }
+            if (!expectSymbol(")")) {
+                return fail(error, "expected ), got " + tokenText(current()));
+            }
+            if (!expectSymbol(";")) {
+                return fail(error, "expected ;, got " + tokenText(current()));
+            }
+            Instruction instruction;
+            instruction.op = Op::Trap;
+            instruction.imm = *code;
+            emit(instruction);
+            return true;
+        }
         if (keyword == "HALT" || keyword == "NOP") {
             advance();
             if (!expectSymbol(";")) {
-                return fail(error, "expected ;");
+                return fail(error, "expected ;, got " + tokenText(current()));
             }
             emit(keyword == "HALT" ? Op::Halt : Op::Nop);
             return true;
@@ -211,18 +310,12 @@ private:
 
     bool parseBind(std::string& error) {
         advance();
-        if (!expectSymbol("(")) {
-            return fail(error, "expected (");
-        }
-        const auto dst = parseRegister();
+        const auto dst = parseParenthesizedRegister(error);
         if (!dst) {
-            return fail(error, "expected destination register");
-        }
-        if (!expectSymbol(")")) {
-            return fail(error, "expected )");
+            return false;
         }
         if (!expectSymbol("::=")) {
-            return fail(error, "expected ::=");
+            return fail(error, "expected ::=, got " + tokenText(current()));
         }
         const auto lhs = parseOperand(error);
         if (!lhs) {
@@ -235,7 +328,7 @@ private:
                 return false;
             }
             if (!expectSymbol(";")) {
-                return fail(error, "expected ;");
+                return fail(error, "expected ;, got " + tokenText(current()));
             }
             emitAssignment(*dst, *lhs);
             Instruction instruction;
@@ -246,95 +339,65 @@ private:
             return true;
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         emitAssignment(*dst, *lhs);
         return true;
     }
 
-    bool parseReveal(std::string& error) {
+    bool parseReveal(std::string& error, bool byte) {
         advance();
-        if (!expectSymbol("(")) {
-            return fail(error, "expected (");
-        }
-        const auto dst = parseRegister();
+        const auto dst = parseParenthesizedRegister(error);
         if (!dst) {
-            return fail(error, "expected register");
-        }
-        if (!expectSymbol(")")) {
-            return fail(error, "expected )");
+            return false;
         }
         if (!expectSymbol("::=")) {
-            return fail(error, "expected ::=");
+            return fail(error, "expected ::=, got " + tokenText(current()));
         }
-        if (!expectIdentifier("MEM")) {
-            return fail(error, "expected MEM");
+        if (!expectIdentifier(byte ? "MEM8" : "MEM")) {
+            return fail(error, "expected memory operand");
         }
-        if (!expectSymbol("[")) {
-            return fail(error, "expected [");
-        }
-        const auto base = parseRegister();
-        if (!base) {
-            return fail(error, "expected base register");
-        }
-        if (!expectSymbol("+")) {
-            return fail(error, "expected +");
-        }
-        const auto offset = parseNumber();
-        if (!offset) {
-            return fail(error, "expected offset");
-        }
-        if (!expectSymbol("]")) {
-            return fail(error, "expected ]");
+        const auto address = parseAddress(error);
+        if (!address) {
+            return false;
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
-        instruction.op = Op::Load;
+        instruction.op = byte ? Op::Load8 : Op::Load;
         instruction.dst = *dst;
-        instruction.src = *base;
-        instruction.imm = *offset;
+        instruction.src = address->base;
+        instruction.index = address->index;
+        instruction.imm = address->offset;
         emit(instruction);
         return true;
     }
 
-    bool parseScribe(std::string& error) {
+    bool parseScribe(std::string& error, bool byte) {
         advance();
-        if (!expectIdentifier("MEM")) {
-            return fail(error, "expected MEM");
+        if (!expectIdentifier(byte ? "MEM8" : "MEM")) {
+            return fail(error, "expected memory operand");
         }
-        if (!expectSymbol("[")) {
-            return fail(error, "expected [");
-        }
-        const auto base = parseRegister();
-        if (!base) {
-            return fail(error, "expected base register");
-        }
-        if (!expectSymbol("+")) {
-            return fail(error, "expected +");
-        }
-        const auto offset = parseNumber();
-        if (!offset) {
-            return fail(error, "expected offset");
-        }
-        if (!expectSymbol("]")) {
-            return fail(error, "expected ]");
+        const auto address = parseAddress(error);
+        if (!address) {
+            return false;
         }
         if (!expectSymbol("::=")) {
-            return fail(error, "expected ::=");
+            return fail(error, "expected ::=, got " + tokenText(current()));
         }
         const auto value = parseOperand(error);
         if (!value) {
             return false;
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
-        instruction.op = Op::Store;
-        instruction.dst = *base;
-        instruction.imm = *offset;
+        instruction.op = byte ? Op::Store8 : Op::Store;
+        instruction.dst = address->base;
+        instruction.index = address->index;
+        instruction.imm = address->offset;
         if (value->isRegister) {
             instruction.src = value->reg;
         } else {
@@ -347,25 +410,19 @@ private:
 
     bool parseVerify(std::string& error) {
         advance();
-        if (!expectSymbol("(")) {
-            return fail(error, "expected (");
-        }
-        const auto lhs = parseRegister();
+        const auto lhs = parseParenthesizedRegister(error);
         if (!lhs) {
-            return fail(error, "expected register");
-        }
-        if (!expectSymbol(")")) {
-            return fail(error, "expected )");
+            return false;
         }
         if (!expectSymbol("<=>")) {
-            return fail(error, "expected <=>");
+            return fail(error, "expected <=>, got " + tokenText(current()));
         }
         const auto rhs = parseOperand(error);
         if (!rhs) {
             return false;
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
         instruction.op = Op::Cmp;
@@ -379,10 +436,10 @@ private:
         advance();
         const auto label = parseLabel();
         if (!label) {
-            return fail(error, "expected label");
+            return fail(error, "expected label, got " + tokenText(current()));
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
         instruction.op = Op::Jmp;
@@ -394,24 +451,24 @@ private:
     bool parseWhen(std::string& error) {
         advance();
         if (!expectSymbol("::")) {
-            return fail(error, "expected ::");
+            return fail(error, "expected ::, got " + tokenText(current()));
         }
         if (!expect(TokenKind::Identifier)) {
-            return fail(error, "expected condition");
+            return fail(error, "expected condition, got " + tokenText(current()));
         }
         const std::string condition = previous().text;
         if (!expectSymbol("=>")) {
-            return fail(error, "expected =>");
+            return fail(error, "expected =>, got " + tokenText(current()));
         }
         if (!expectIdentifier("GATE")) {
-            return fail(error, "expected GATE");
+            return fail(error, "expected GATE, got " + tokenText(current()));
         }
         const auto label = parseLabel();
         if (!label) {
-            return fail(error, "expected label");
+            return fail(error, "expected label, got " + tokenText(current()));
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
         if (!conditionOp(condition, instruction.op)) {
@@ -426,16 +483,64 @@ private:
         advance();
         const auto label = parseLabel();
         if (!label) {
-            return fail(error, "expected label");
+            return fail(error, "expected label, got " + tokenText(current()));
         }
         if (!expectSymbol(";")) {
-            return fail(error, "expected ;");
+            return fail(error, "expected ;, got " + tokenText(current()));
         }
         Instruction instruction;
         instruction.op = Op::Call;
         const std::size_t index = emit(instruction);
         calls_.push_back(LocalCall{index, *label});
         return true;
+    }
+
+    std::optional<std::uint8_t> parseParenthesizedRegister(std::string& error) {
+        if (!expectSymbol("(")) {
+            fail(error, "expected (, got " + tokenText(current()));
+            return std::nullopt;
+        }
+        const auto reg = parseRegister();
+        if (!reg) {
+            fail(error, "expected register, got " + tokenText(current()));
+            return std::nullopt;
+        }
+        if (!expectSymbol(")")) {
+            fail(error, "expected ), got " + tokenText(current()));
+            return std::nullopt;
+        }
+        return reg;
+    }
+
+    std::optional<Address> parseAddress(std::string& error) {
+        if (!expectSymbol("[")) {
+            fail(error, "expected [, got " + tokenText(current()));
+            return std::nullopt;
+        }
+        const auto base = parseRegister();
+        if (!base) {
+            fail(error, "expected base register, got " + tokenText(current()));
+            return std::nullopt;
+        }
+        Address address;
+        address.base = *base;
+        if (expectSymbol("+")) {
+            if (check(TokenKind::Number)) {
+                const auto offset = parseNumber();
+                address.offset = *offset;
+            } else if (check(TokenKind::Register)) {
+                const auto index = parseRegister();
+                address.index = *index;
+            } else {
+                fail(error, "expected offset or index register, got " + tokenText(current()));
+                return std::nullopt;
+            }
+        }
+        if (!expectSymbol("]")) {
+            fail(error, "expected ], got " + tokenText(current()));
+            return std::nullopt;
+        }
+        return address;
     }
 
     std::optional<Operand> parseOperand(std::string& error) {
@@ -472,7 +577,7 @@ private:
             program_.strings.push_back(value);
             return Operand{false, 0, id};
         }
-        fail(error, "expected operand");
+        fail(error, "expected operand, got " + tokenText(current()));
         return std::nullopt;
     }
 
@@ -533,11 +638,11 @@ private:
     }
 
     static bool conditionOp(const std::string& name, Op& op) {
-        if (name == "EQUAL" || name == "ZERO") {
+        if (name == "EQUAL") {
             op = Op::Je;
             return true;
         }
-        if (name == "NOT_EQUAL" || name == "NONZERO") {
+        if (name == "NOT_EQUAL") {
             op = Op::Jne;
             return true;
         }
@@ -555,6 +660,30 @@ private:
         }
         if (name == "GREATER_EQUAL" || name == "GREATER_OR_EQUAL") {
             op = Op::Jge;
+            return true;
+        }
+        if (name == "ZERO") {
+            op = Op::Jz;
+            return true;
+        }
+        if (name == "NONZERO") {
+            op = Op::Jnz;
+            return true;
+        }
+        if (name == "CARRY") {
+            op = Op::Jc;
+            return true;
+        }
+        if (name == "NO_CARRY") {
+            op = Op::Jnc;
+            return true;
+        }
+        if (name == "OVERFLOW") {
+            op = Op::Jo;
+            return true;
+        }
+        if (name == "NO_OVERFLOW") {
+            op = Op::Jno;
             return true;
         }
         return false;
@@ -617,6 +746,11 @@ private:
     }
 
     std::size_t emit(Instruction instruction) {
+        if (instruction.line == 0) {
+            const Token& token = current();
+            instruction.line = static_cast<std::uint32_t>(token.line);
+            instruction.column = static_cast<std::uint32_t>(token.column);
+        }
         program_.code.push_back(instruction);
         return program_.code.size() - 1;
     }
@@ -680,7 +814,8 @@ private:
     }
 
     bool fail(std::string& error, const std::string& message) const {
-        error = origin_ + ":" + std::to_string(current().line) + ":" + std::to_string(current().column)
+        const Token& token = index_ < tokens_.size() ? tokens_[index_] : tokens_.back();
+        error = origin_ + ":" + std::to_string(token.line) + ":" + std::to_string(token.column)
             + ": " + message;
         return false;
     }

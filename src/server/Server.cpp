@@ -514,7 +514,10 @@ Server::Server(ServerConfig config)
       commands_(*this),
       authPool_(2),
       net_(*this, config_),
-      scriptEngine_(*this) {}
+      scriptEngine_(*this, ScriptOptions{
+          static_cast<lang::Word>(config_.scriptMaxInstructions),
+          config_.scriptTrace,
+          config_.scriptDisassemble}) {}
 
 Server::~Server() {
     stop();
