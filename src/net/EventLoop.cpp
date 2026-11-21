@@ -7,6 +7,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
+#include <sched.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
@@ -58,6 +60,10 @@ int createListener(const std::string& host, std::uint16_t port, int index) {
         }
         int enabled = 1;
         ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled));
+#ifdef TCP_DEFER_ACCEPT
+        int deferAccept = 1;
+        ::setsockopt(fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &deferAccept, sizeof(deferAccept));
+#endif
 #ifdef SO_REUSEPORT
         if (::setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled)) != 0) {
             Log::warn("listener {}: SO_REUSEPORT unavailable: {}", index, std::strerror(errno));
@@ -81,12 +87,13 @@ int createListener(const std::string& host, std::uint16_t port, int index) {
 
 }
 
-EventLoop::EventLoop(ConnectionHandler& handler, std::string host, std::uint16_t port, std::size_t maxPacketSize, int index)
+EventLoop::EventLoop(ConnectionHandler& handler, std::string host, std::uint16_t port, std::size_t maxPacketSize, int index, bool pinThread)
     : handler_(handler),
       host_(std::move(host)),
       port_(port),
       maxPacketSize_(maxPacketSize),
-      index_(index) {}
+      index_(index),
+      pinThread_(pinThread) {}
 
 EventLoop::~EventLoop() {
     stop();
@@ -198,6 +205,17 @@ bool EventLoop::isLoopThread() const {
 
 void EventLoop::run() {
     threadId_ = std::this_thread::get_id();
+    const std::string threadName = "mc-io-" + std::to_string(index_);
+    pthread_setname_np(pthread_self(), threadName.c_str());
+    if (pinThread_) {
+        const long cpuCount = std::max(1L, sysconf(_SC_NPROCESSORS_ONLN));
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(static_cast<int>(index_ % cpuCount), &set);
+        if (sched_setaffinity(0, sizeof(set), &set) != 0) {
+            Log::debug("listener {} affinity failed: {}", index_, std::strerror(errno));
+        }
+    }
     Log::debug("listener {} thread started", index_);
 
     std::array<epoll_event, 256> events{};

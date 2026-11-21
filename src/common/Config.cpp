@@ -125,11 +125,22 @@ bool Config::applyLine(ServerConfig& config, std::string_view line) {
         config.compressionThreshold = clampInt(parseInt(value, config.compressionThreshold), -1, 1048576);
     } else if (key == "io-threads") {
         config.ioThreads = clampInt(parseInt(value, config.ioThreads), 0, 64);
+    } else if (key == "pin-io-threads") {
+        config.pinIoThreads = parseBool(value, config.pinIoThreads);
     } else if (key == "player-timeout-ms") {
         config.playerTimeoutMs = clampInt(parseInt(value, config.playerTimeoutMs), 1000, 600000);
     } else if (key == "max-packet-size") {
         const int parsed = parseInt(value, static_cast<int>(config.maxPacketSize));
         config.maxPacketSize = static_cast<std::size_t>(clampInt(parsed, 1024, 64 * 1024 * 1024));
+    } else if (key == "max-output-buffer") {
+        const int parsed = parseInt(value, static_cast<int>(config.maxOutputBuffer));
+        config.maxOutputBuffer = static_cast<std::size_t>(clampInt(parsed, 65536, 256 * 1024 * 1024));
+    } else if (key == "max-item-entities") {
+        config.maxItemEntities = clampInt(parseInt(value, config.maxItemEntities), 16, 100000);
+    } else if (key == "max-falling-blocks") {
+        config.maxFallingBlocks = clampInt(parseInt(value, config.maxFallingBlocks), 16, 100000);
+    } else if (key == "max-mobs") {
+        config.maxMobs = clampInt(parseInt(value, config.maxMobs), 1, 10000);
     } else if (key == "level-type") {
         config.levelType = value;
     } else if (key == "level-seed") {
@@ -169,7 +180,7 @@ bool Config::applyLine(ServerConfig& config, std::string_view line) {
     } else if (key == "autosave-seconds") {
         config.autosaveSeconds = clampInt(parseInt(value, config.autosaveSeconds), 0, 86400);
     } else if (key == "max-cached-chunks") {
-        config.maxCachedChunks = clampInt(parseInt(value, config.maxCachedChunks), 64, 1000000);
+        config.maxCachedChunks = clampInt(parseInt(value, config.maxCachedChunks), 64, 100000);
     } else if (key == "player-data") {
         config.playerData = parseBool(value, config.playerData);
     } else if (key == "player-data-dir") {

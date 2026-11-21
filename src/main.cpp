@@ -1,5 +1,9 @@
 #include <iostream>
 #include <string>
+
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 #include <string_view>
 
 #include "common/Config.hpp"
@@ -77,6 +81,10 @@ int main(int argc, char** argv) {
     if (!portOverride.empty()) {
         mc::Config::applyLine(config, "port=" + portOverride);
     }
+
+#if defined(__GLIBC__) && defined(M_ARENA_MAX)
+    mallopt(M_ARENA_MAX, 2);
+#endif
 
     mc::Log::init(config.debug, config.color);
     mc::Log::setFile(config.logFile);

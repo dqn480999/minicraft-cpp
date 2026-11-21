@@ -20,13 +20,18 @@ struct ServerConfig {
     bool hardcore{false};
     int compressionThreshold{256};
     int ioThreads{0};
+    bool pinIoThreads{false};
     int playerTimeoutMs{30000};
     std::size_t maxPacketSize{2097152};
+    std::size_t maxOutputBuffer{8 * 1024 * 1024};
+    int maxItemEntities{2048};
+    int maxFallingBlocks{1024};
+    int maxMobs{256};
     std::string levelType{"flat"};
     std::uint64_t levelSeed{0};
     std::string ops;
     std::string opsFile{"ops.txt"};
-    int maxCachedChunks{4096};
+    int maxCachedChunks{1024};
     bool playerData{true};
     std::string playerDataDir{"playerdata"};
     bool worldSave{true};
@@ -39,7 +44,7 @@ struct ServerConfig {
     bool itemPickupAnimation{false};
     bool sandPhysics{true};
     bool fluidsEnabled{true};
-    int fluidUpdatesPerTick{8};
+    int fluidUpdatesPerTick{32};
     int fluidTickInterval{4};
     int hungerIntervalSeconds{20};
     double timeScale{0.5};

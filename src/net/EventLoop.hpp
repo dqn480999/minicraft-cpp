@@ -19,7 +19,7 @@ class ConnectionHandler;
 
 class EventLoop {
 public:
-    EventLoop(ConnectionHandler& handler, std::string host, std::uint16_t port, std::size_t maxPacketSize, int index);
+    EventLoop(ConnectionHandler& handler, std::string host, std::uint16_t port, std::size_t maxPacketSize, int index, bool pinThread);
     ~EventLoop();
 
     EventLoop(const EventLoop&) = delete;
@@ -47,6 +47,7 @@ private:
     std::uint16_t port_;
     std::size_t maxPacketSize_;
     int index_;
+    bool pinThread_;
 
     int epollFd_{-1};
     int listenFd_{-1};

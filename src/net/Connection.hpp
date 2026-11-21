@@ -157,6 +157,7 @@ public:
 
     void acknowledgeKeepAlive(std::int32_t id);
     void setTimeoutMs(int timeoutMs);
+    void setMaxOutputBuffer(std::size_t size);
     bool takeMovementBroadcastSlot();
     bool hasBroadcastState() const;
     void setBroadcastState(double x, double y, double z, float yaw, float pitch);
@@ -212,6 +213,7 @@ private:
     bool awaitingKeepAlive_{false};
     std::int32_t keepAliveId_{0};
     int timeoutMs_{30000};
+    std::size_t maxOutputBuffer_{8 * 1024 * 1024};
 
     Uuid uuid_;
     std::string username_;

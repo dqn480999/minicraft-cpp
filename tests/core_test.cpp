@@ -10,6 +10,7 @@
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 
+#include "common/Asm.hpp"
 #include "common/Crypto.hpp"
 #include "common/Json.hpp"
 #include "common/Uuid.hpp"
@@ -29,6 +30,27 @@ void expect(bool condition, const std::string& message) {
         std::cerr << "FAIL: " << message << '\n';
         ++g_failures;
     }
+}
+
+void testAssembly() {
+    const std::array<std::int32_t, 8> values = {0, 1, 127, 128, 255, 2147483647, -1, -2147483648};
+    for (const std::int32_t value : values) {
+        mc::u8 encoded[5] = {0, 0, 0, 0, 0};
+        const int length = mc::varIntEncode(value, encoded);
+        mc::i32 decoded = 0;
+        const int consumed = mc::varIntDecode(encoded, static_cast<std::size_t>(length), decoded);
+        expect(consumed == length && decoded == value, "assembly varint roundtrip");
+    }
+
+    std::array<mc::u8, 128> source{};
+    std::array<mc::u8, 128> destination{};
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        source[i] = static_cast<mc::u8>(i * 7 + 3);
+    }
+    mc::fastCopy(destination.data(), source.data(), source.size());
+    expect(destination == source, "assembly fast copy");
+    mc::fastZero(destination.data(), destination.size());
+    expect(std::all_of(destination.begin(), destination.end(), [](mc::u8 byte) { return byte == 0; }), "assembly fast zero");
 }
 
 void testVarInt() {
@@ -256,6 +278,7 @@ void testWorldPersistence() {
 
 int main() {
     testVarInt();
+    testAssembly();
     testPosition();
     testUuid();
     testHash();

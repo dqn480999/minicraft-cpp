@@ -900,7 +900,9 @@ bool doFluidTest(ProbeClient& client, std::int32_t x, std::int32_t z) {
     command.writeString("/setblock " + std::to_string(x) + " 6 " + std::to_string(z) + " 9");
     client.sendPacket(std::move(command));
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(6);
+    bool spread = false;
+    bool sourceRemoved = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
     while (std::chrono::steady_clock::now() < deadline) {
         mc::ByteBuffer packet;
         if (!client.readPacket(packet)) {
@@ -914,9 +916,15 @@ bool doFluidTest(ProbeClient& client, std::int32_t x, std::int32_t z) {
             packet.readPosition(blockX, blockY, blockZ);
             const mc::u16 block = static_cast<mc::u16>(packet.readVarInt());
             const mc::u16 id = static_cast<mc::u16>(block >> 4);
-            if (blockX == x + 3 && blockY == 6 && blockZ == z && (id == 8 || id == 9)) {
+            if (!spread && blockX == x + 3 && blockY == 6 && blockZ == z && (id == 8 || id == 9)) {
+                spread = true;
                 std::cout << "fluid spread PASS\n";
-                return true;
+                mc::ByteBuffer remove;
+                remove.writeVarInt(0x01);
+                remove.writeString("/setblock " + std::to_string(x) + " 6 " + std::to_string(z) + " 1");
+                client.sendPacket(std::move(remove));
+            } else if (spread && blockX == x + 3 && blockY == 6 && blockZ == z && id == 0) {
+                sourceRemoved = true;
             }
         } else if (packetId == 0x00) {
             const std::int32_t keepAlive = packet.readVarInt();
@@ -927,8 +935,12 @@ bool doFluidTest(ProbeClient& client, std::int32_t x, std::int32_t z) {
         } else if (packetId == 0x40) {
             return false;
         }
+        if (spread && sourceRemoved) {
+            std::cout << "fluid recede PASS\n";
+            return true;
+        }
     }
-    std::cerr << "fluid spread FAIL\n";
+    std::cerr << "fluid test FAIL spread=" << spread << " recede=" << sourceRemoved << '\n';
     return false;
 }
 

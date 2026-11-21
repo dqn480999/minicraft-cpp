@@ -284,7 +284,13 @@ void Connection::sendPacket(ByteBuffer body) {
             encryption_->encrypt(bytes.data(), bytes.size());
         }
         output_.insert(output_.end(), bytes.begin(), bytes.end());
-        setWriteInterestLocked(true);
+        if (output_.size() - outputOffset_ > maxOutputBuffer_) {
+            dead_.store(true, std::memory_order_release);
+            output_.clear();
+            outputOffset_ = 0;
+        } else {
+            setWriteInterestLocked(true);
+        }
     }
     if (external) {
         loop_.wake();
@@ -854,6 +860,10 @@ void Connection::acknowledgeKeepAlive(std::int32_t id) {
 
 void Connection::setTimeoutMs(int timeoutMs) {
     timeoutMs_ = std::clamp(timeoutMs, 1000, 600000);
+}
+
+void Connection::setMaxOutputBuffer(std::size_t size) {
+    maxOutputBuffer_ = std::max<std::size_t>(size, 65536);
 }
 
 bool Connection::hasBroadcastState() const {

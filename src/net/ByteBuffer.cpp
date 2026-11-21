@@ -2,6 +2,8 @@
 
 #include <bit>
 #include <cstring>
+
+#include "common/Asm.hpp"
 #include <limits>
 
 namespace mc {
@@ -122,13 +124,17 @@ bool ByteBuffer::readBool() {
 }
 
 i32 ByteBuffer::readVarInt() {
-    u32 result = 0;
-    for (int shift = 0; shift < 35; shift += 7) {
-        const u8 byte = readU8();
-        result |= static_cast<u32>(byte & 0x7F) << shift;
-        if ((byte & 0x80) == 0) {
-            return static_cast<i32>(result);
-        }
+    if (remaining() == 0) {
+        throw BufferUnderflow("buffer underflow");
+    }
+    i32 value = 0;
+    const int consumed = varIntDecode(data_.data() + readPosition_, remaining(), value);
+    if (consumed > 0) {
+        readPosition_ += static_cast<std::size_t>(consumed);
+        return value;
+    }
+    if (consumed == 0) {
+        throw BufferUnderflow("buffer underflow");
     }
     throw ProtocolError("varint is too long");
 }
@@ -225,12 +231,9 @@ void ByteBuffer::writeBool(bool value) {
 }
 
 void ByteBuffer::writeVarInt(i32 value) {
-    u32 remaining = std::bit_cast<u32>(value);
-    while (remaining >= 0x80) {
-        writeU8(static_cast<u8>((remaining & 0x7F) | 0x80));
-        remaining >>= 7;
-    }
-    writeU8(static_cast<u8>(remaining));
+    u8 encoded[5] = {0, 0, 0, 0, 0};
+    const int length = varIntEncode(value, encoded);
+    data_.insert(data_.end(), encoded, encoded + length);
 }
 
 void ByteBuffer::writeVarLong(i64 value) {

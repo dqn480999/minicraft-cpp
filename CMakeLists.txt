@@ -14,8 +14,9 @@ find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(CURL)
 
-add_library(minicraft_core STATIC
+set(MINICRAFT_CORE_SOURCES
     src/common/Log.cpp
+    src/common/Asm.cpp
     src/common/Config.cpp
     src/common/Json.cpp
     src/common/Crypto.cpp
@@ -37,8 +38,26 @@ add_library(minicraft_core STATIC
     src/server/Server.cpp
 )
 
+set(MINICRAFT_NASM_ENABLED OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    find_program(NASM_EXECUTABLE nasm)
+    if(NASM_EXECUTABLE)
+        enable_language(ASM_NASM)
+        set(CMAKE_ASM_NASM_OBJECT_FORMAT elf64)
+        list(APPEND MINICRAFT_CORE_SOURCES src/asm/fastmem.asm)
+        set(MINICRAFT_NASM_ENABLED ON)
+    endif()
+endif()
+
+add_library(minicraft_core STATIC ${MINICRAFT_CORE_SOURCES})
+
+if(MINICRAFT_NASM_ENABLED)
+    target_compile_definitions(minicraft_core PUBLIC MINICRAFT_HAVE_NASM=1)
+    target_include_directories(minicraft_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/asm)
+endif()
+
 target_include_directories(minicraft_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_compile_options(minicraft_core PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+target_compile_options(minicraft_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Wno-unused-parameter>)
 target_link_libraries(minicraft_core PUBLIC Threads::Threads ZLIB::ZLIB OpenSSL::Crypto)
 
 if(CURL_FOUND)

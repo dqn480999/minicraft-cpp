@@ -12,10 +12,15 @@
 #include <iostream>
 #include <iterator>
 #include <poll.h>
+#include <pthread.h>
 #include <span>
 #include <thread>
 #include <utility>
 #include <unistd.h>
+
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
 
 #include "common/Crypto.hpp"
 #include "common/Json.hpp"
@@ -617,6 +622,9 @@ void Server::stop() {
     authPool_.stop();
     net_.stop();
     world_.save();
+#if defined(__GLIBC__)
+    malloc_trim(0);
+#endif
     players_.clear();
     Log::info("server stopped");
 }
@@ -730,6 +738,7 @@ void Server::onOpen(Connection& connection) {
     connection.setClientViewDistance(config_.viewDistance);
     connection.setTimeoutMs(config_.playerTimeoutMs);
     connection.setMaxPacketsPerSecond(config_.maxPacketsPerSecond);
+    connection.setMaxOutputBuffer(config_.maxOutputBuffer);
     Log::debug("connection from {}", connection.remoteAddress());
 }
 
@@ -997,6 +1006,7 @@ void Server::cleanupItems() {
 }
 
 void Server::tickLoop() {
+    pthread_setname_np(pthread_self(), "mc-tick");
     auto nextTick = std::chrono::steady_clock::now();
     auto nextGrassTick = nextTick + std::chrono::seconds(5);
     while (tickRunning_.load(std::memory_order_acquire)) {
@@ -1025,6 +1035,9 @@ void Server::tickLoop() {
             if (now >= nextAutosave_) {
                 saveAllPlayers();
                 world_.save();
+#if defined(__GLIBC__)
+                malloc_trim(0);
+#endif
                 nextAutosave_ = now + std::chrono::seconds(config_.autosaveSeconds);
             }
         }
@@ -1276,6 +1289,13 @@ void Server::tryStartFalling(std::int32_t x, std::int32_t y, std::int32_t z) {
     if (!config_.sandPhysics || y <= 0 || y > 255) {
         return;
     }
+    {
+        std::lock_guard lock(fallingMutex_);
+        if (static_cast<int>(fallingBlocks_.size()) >= config_.maxFallingBlocks) {
+            return;
+        }
+    }
+
     u16 state = kAir;
     {
         std::lock_guard lock(fallingStartMutex_);
@@ -1520,6 +1540,38 @@ void Server::updateFluids() {
         const int level = source ? 0 : (meta == 8 ? 1 : static_cast<int>(meta));
         const int maxLevel = water ? 7 : 3;
         const u16 flowingId = water ? 8 : 10;
+        const u16 sourceId = water ? 9 : 11;
+
+        if (!source) {
+            bool supported = false;
+            const u16 aboveId = static_cast<u16>(world_.getBlock(x, y + 1, z) >> 4);
+            if (aboveId == sourceId || aboveId == flowingId) {
+                supported = true;
+            }
+            if (!supported) {
+                const auto neighborSupports = [&](int nx, int nz) {
+                    const u16 neighbor = world_.getBlock(nx, y, nz);
+                    const u16 neighborId = static_cast<u16>(neighbor >> 4);
+                    if (neighborId == sourceId) {
+                        return true;
+                    }
+                    if (neighborId == flowingId) {
+                        const int neighborLevel = (neighbor & 0x0F) == 8 ? 0 : static_cast<int>(neighbor & 0x0F);
+                        return neighborLevel < level;
+                    }
+                    return false;
+                };
+                supported = neighborSupports(x + 1, z) || neighborSupports(x - 1, z)
+                    || neighborSupports(x, z + 1) || neighborSupports(x, z - 1);
+            }
+            if (!supported) {
+                Log::trace("fluid recede {},{},{}", x, y, z);
+                world_.setBlock(x, y, z, kAir);
+                broadcastBlockChange(x, y, z, kAir);
+                scheduleFluidNeighbors(x, y, z);
+                continue;
+            }
+        }
 
         if (y > 0) {
             const u16 below = world_.getBlock(x, y - 1, z);
@@ -1575,6 +1627,9 @@ void Server::spawnMob(u8 type, double x, double y, double z, float yaw) {
 
     {
         std::lock_guard lock(mobsMutex_);
+        if (static_cast<int>(mobs_.size()) >= config_.maxMobs) {
+            return;
+        }
         mobs_.push_back(mob);
     }
     for (const auto& player : players_.snapshot()) {
@@ -1942,6 +1997,9 @@ void Server::spawnItemEntity(const ItemStack& stack, double x, double y, double 
 
     {
         std::lock_guard lock(itemsMutex_);
+        if (static_cast<int>(items_.size()) >= config_.maxItemEntities) {
+            return;
+        }
         items_.push_back(item);
     }
     for (const auto& player : players_.snapshot()) {
@@ -2156,14 +2214,10 @@ void Server::handleLogin(Connection& connection, std::int32_t packetId, ByteBuff
             connection.disconnect(chat::text("Server is full"));
             return;
         }
-        if (players_.nameTaken(username)) {
-            if (config_.nameReplace) {
-                kickExistingByName(username);
-            } else {
-                Log::warn("rejected {} from {}: name already online", username, connection.remoteAddress());
-                connection.disconnect(chat::text("A player with this name is already online"));
-                return;
-            }
+        if (players_.nameTaken(username) && !config_.nameReplace) {
+            Log::warn("rejected {} from {}: name already online", username, connection.remoteAddress());
+            connection.disconnect(chat::text("A player with this name is already online"));
+            return;
         }
 
         connection.setPendingUsername(username);
@@ -2277,6 +2331,10 @@ void Server::finishLogin(const std::shared_ptr<Connection>& connection, const Pr
         buffer.writeString(profile.name);
     });
     connection->setState(ConnectionState::Play);
+
+    if (config_.nameReplace && players_.nameTaken(profile.name)) {
+        kickExistingByName(profile.name);
+    }
 
     sendJoinSequence(*connection);
 

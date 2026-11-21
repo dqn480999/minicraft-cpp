@@ -6,15 +6,18 @@ The project implements the network protocol, world storage, inventory, survival 
 
 ## Features
 
-- epoll networking with multiple I/O threads and `SO_REUSEPORT`
+- epoll networking with multiple I/O threads, `SO_REUSEPORT` and `TCP_DEFER_ACCEPT`
+- named I/O threads and optional CPU affinity (`pin-io-threads`)
+- optional NASM fast paths for VarInt coding and memory copy/zero
 - handshake, status, legacy ping, login (offline and Mojang online mode)
 - zlib packet compression and AES-128/CFB8 encryption
-- flat world with saved modified chunks and player data
+- flat world with sparse chunk sections, saved modified chunks and player data
+- bounded chunk cache, entity limits and per-connection output limits
 - chunk streaming, block placement and breaking
 - inventory, cursor, held item, item drops and pickup
 - survival: health, hunger, regeneration, fall/lava/drowning/starvation damage, death and respawn
 - falling sand and gravel
-- water and lava spread
+- water and lava spread and recede after source removal
 - daylight and block light calculation
 - passive mobs, villagers and a generated village
 - chat colors and permission commands
@@ -30,11 +33,12 @@ The project implements the network protocol, world storage, inventory, survival 
 - OpenSSL
 - libcurl (optional, required for `online-mode=true`)
 - pthreads
+- NASM (optional, x86_64 fast paths)
 
 Ubuntu / Debian:
 
 ```bash
-sudo apt install build-essential cmake ninja-build zlib1g-dev libssl-dev libcurl4-openssl-dev
+sudo apt install build-essential cmake ninja-build zlib1g-dev libssl-dev libcurl4-openssl-dev nasm
 ```
 
 ## Build
@@ -61,7 +65,7 @@ Runtime files are created in the working directory:
 
 ## Test
 
-The probe client connects to a running server and checks status, login, chunks, inventory actions, drops, pickup, sand, fluids, damage, respawn, mobs and eating.
+The probe client connects to a running server and checks status, login, chunks, inventory actions, drops, pickup, sand, fluid spread and receding, damage, respawn, mobs and eating.
 
 ```bash
 ./build/probe 127.0.0.1 25566 TestBot
@@ -88,12 +92,14 @@ The test profile uses faster hunger/time settings:
 - `max-players`, `view-distance`
 - `gamemode`, `difficulty`, `motd`
 - `compression-threshold`
-- `io-threads`
+- `io-threads`, `pin-io-threads`
 - `ops`, `ops-file`, `name-replace`
-- `world-save`, `world-dir`
+- `world-save`, `world-dir`, `max-cached-chunks`
 - `player-data`, `player-data-dir`
 - `item-drops`, `item-pickup-delay-ms`, `item-pickup-radius`
-- `sand-physics`, `fluids-enabled`, `fluid-tick-interval`
+- `sand-physics`, `fluids-enabled`, `fluid-tick-interval`, `fluid-updates-per-tick`
+- `max-item-entities`, `max-falling-blocks`, `max-mobs`
+- `max-packet-size`, `max-output-buffer`
 - `hunger-interval-seconds`, `time-scale`
 - `autosave-seconds`
 - `log-file`
@@ -130,5 +136,4 @@ config          server and test profiles
 - no crafting, armor effects or tool durability
 - item NBT is not persisted
 - light does not propagate across chunk boundaries
-- fluids do not recede after removing a source
 - no whitelist, ban list or TPS metrics

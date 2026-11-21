@@ -30,6 +30,7 @@ private:
     std::uint16_t port_;
     std::size_t maxPacketSize_;
     int threadCount_;
+    bool pinThreads_;
     std::vector<std::unique_ptr<EventLoop>> loops_;
 };
 
