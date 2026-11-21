@@ -21,6 +21,7 @@ The project implements the network protocol, world storage, inventory, survival 
 - daylight and block light calculation
 - passive mobs, villagers and a generated village
 - chat colors and permission commands
+- embedded OBLVN register bytecode for server events
 - autosave and server log file
 
 ## Requirements
@@ -71,7 +72,7 @@ The probe client connects to a running server and checks status, login, chunks, 
 ./build/probe 127.0.0.1 25566 TestBot
 ```
 
-Unit tests:
+Unit tests cover protocol primitives, chunks, lighting, persistence, assembly paths and the OBLVN compiler and virtual machine:
 
 ```bash
 ./build/core_test
@@ -83,6 +84,22 @@ The test profile uses faster hunger/time settings:
 ./build/minicraft --config config/test.properties --port 25566
 ./build/probe 127.0.0.1 25566 TestBot
 ```
+
+## Scripting
+
+OBLVN is a low-level register language compiled to bytecode and executed by the server core. Scripts in `scripts/*.obl` can handle `on_join`, `on_leave`, `on_chat`, `on_block_break`, `on_block_place`, `on_death`, `on_command` and `on_tick`. They have 16 registers, 4096 memory cells, a 256-entry stack, conditional gates, native calls for chat, player counts, time and block access, and a fixed instruction limit. Operators can hot reload scripts with `/script reload` or dispatch an oracle with `/script run <oracle>`.
+
+```obl
+ARCANA "welcome" {
+    ORACLE @on_join ~> {
+        BIND($a0) ::= SIGIL("&eWelcome to the obelisk");
+        SUMMON(#2);
+        HALT;
+    }
+}
+```
+
+The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). Disable scripting with `scripts-enabled=false`.
 
 ## Configuration
 
@@ -102,6 +119,7 @@ The test profile uses faster hunger/time settings:
 - `max-packet-size`, `max-output-buffer`
 - `hunger-interval-seconds`, `time-scale`
 - `autosave-seconds`
+- `scripts-enabled`, `script-dir`, `script-tick-interval-ms`
 - `log-file`
 
 ## Commands
@@ -111,6 +129,7 @@ Player and console commands:
 ```text
 /help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop
 /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood
+/script reload /script run <oracle>
 ```
 
 Administrative commands require operator status. The console always has operator access.
@@ -122,7 +141,9 @@ src/common      logging, config, JSON, crypto, UUID, thread pool
 src/net         buffers, compression, encryption, connections, epoll loops
 src/protocol    chat, authentication, item stacks
 src/world       blocks, chunks, world, persistence
+src/lang        OBLVN lexer, compiler, virtual machine, event engine
 src/server      server, players, commands, mobs, entities
+scripts         OBLVN event scripts
 tests           probe client and unit tests
 config          server and test profiles
 ```
@@ -131,7 +152,7 @@ config          server and test profiles
 
 - Minecraft Java 1.8.9 only
 - no full player physics or movement anti-cheat
-- simple mob AI without pathfinding or hostile spawning
+- simple mob behavior without pathfinding or hostile spawning
 - one generated village at a fixed location
 - no crafting, armor effects or tool durability
 - item NBT is not persisted

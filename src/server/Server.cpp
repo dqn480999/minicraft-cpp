@@ -513,7 +513,8 @@ Server::Server(ServerConfig config)
              config_.worldDir, config_.worldSave, config_.timeScale),
       commands_(*this),
       authPool_(2),
-      net_(*this, config_) {}
+      net_(*this, config_),
+      scriptEngine_(*this) {}
 
 Server::~Server() {
     stop();
@@ -559,6 +560,12 @@ bool Server::start() {
 
     generateVillage();
     spawnInitialMobs();
+
+    if (config_.scriptsEnabled) {
+        if (!scriptEngine_.loadDirectory(config_.scriptDir)) {
+            Log::warn("script loading completed with errors");
+        }
+    }
 
     tickRunning_.store(true, std::memory_order_release);
     nextAutosave_ = std::chrono::steady_clock::now()
@@ -643,6 +650,14 @@ World& Server::world() {
 
 PlayerManager& Server::players() {
     return players_;
+}
+
+ScriptEngine& Server::scripts() {
+    return scriptEngine_;
+}
+
+bool Server::reloadScripts() {
+    return scriptEngine_.reload(config_.scriptDir);
 }
 
 bool Server::isOp(std::string_view name) const {
@@ -789,6 +804,7 @@ void Server::onClose(Connection& connection) {
         sendPlayerInfoRemove(*other, connection.uuid());
     }
     sendLeaveMessage(name);
+    scriptEngine_.fire("on_leave", {}, {name});
 }
 
 void Server::onLegacyPing(Connection& connection) {
@@ -1009,6 +1025,9 @@ void Server::tickLoop() {
     pthread_setname_np(pthread_self(), "mc-tick");
     auto nextTick = std::chrono::steady_clock::now();
     auto nextGrassTick = nextTick + std::chrono::seconds(5);
+    auto nextScriptTick = nextTick
+        + std::chrono::milliseconds(config_.scriptTickIntervalMs > 0 ? config_.scriptTickIntervalMs : 1000);
+    std::int64_t scriptTicks = 0;
     while (tickRunning_.load(std::memory_order_acquire)) {
         {
             std::unique_lock lock(tickMutex_);
@@ -1039,6 +1058,14 @@ void Server::tickLoop() {
                 malloc_trim(0);
 #endif
                 nextAutosave_ = now + std::chrono::seconds(config_.autosaveSeconds);
+            }
+        }
+        if (config_.scriptsEnabled) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= nextScriptTick) {
+                nextScriptTick = now + std::chrono::milliseconds(
+                    config_.scriptTickIntervalMs > 0 ? config_.scriptTickIntervalMs : 1000);
+                scriptEngine_.fire("on_tick", {++scriptTicks});
             }
         }
         nextTick += std::chrono::milliseconds(50);
@@ -2360,6 +2387,7 @@ void Server::finishLogin(const std::shared_ptr<Connection>& connection, const Pr
     sendActiveFallingBlocks(*connection);
     sendActiveMobs(*connection);
     sendJoinMessage(*connection);
+    scriptEngine_.fire("on_join", {entityId}, {profile.name});
 }
 
 void Server::sendJoinSequence(Connection& connection) {
@@ -2658,6 +2686,7 @@ void Server::applyDamage(Connection& connection, float amount) {
     }
     broadcastEquipment(connection.shared_from_this());
     Log::info("{} died", connection.username());
+    scriptEngine_.fire("on_death", {connection.entityId()}, {connection.username()});
 }
 
 void Server::healPlayer(Connection& connection, float amount) {
@@ -3059,6 +3088,7 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
                 break;
             }
             broadcastPlayerChat(connection, message);
+            scriptEngine_.fire("on_chat", {connection.entityId()}, {connection.username(), message});
         }
         break;
     }
@@ -3212,6 +3242,7 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
                     spawnItemDrop(existing, x, y, z);
                 }
                 tryStartFalling(x, y + 1, z);
+                scriptEngine_.fire("on_block_break", {x, y, z, static_cast<std::int64_t>(existing)});
             }
         }
         break;
@@ -3300,6 +3331,7 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
             refreshChunkAt(targetX, targetZ);
         }
         tryStartFalling(targetX, targetY, targetZ);
+        scriptEngine_.fire("on_block_place", {targetX, targetY, targetZ, static_cast<std::int64_t>(block)});
         if (mode != 1) {
             connection.takeHeldItem(1);
             broadcastEquipment(connection.shared_from_this());

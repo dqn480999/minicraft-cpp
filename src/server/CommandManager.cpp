@@ -118,10 +118,14 @@ void CommandManager::execute(const std::shared_ptr<Connection>& source, std::str
         || command == "stop" || command == "op" || command == "deop" || command == "save" || command == "cleanup" || command == "clearitems"
         || command == "give" || command == "clear" || command == "setblock"
         || command == "heal" || command == "feed" || command == "kill" || command == "summon"
-        || command == "setfood";
+        || command == "setfood" || command == "script";
     if (administrative && !requireOp(source)) {
         return;
     }
+
+    server_.scripts().fire("on_command",
+                           {source ? source->entityId() : 0},
+                           {command, join(tokens, 1)});
 
     if (command == "help") {
         help(source);
@@ -171,13 +175,15 @@ void CommandManager::execute(const std::shared_ptr<Connection>& source, std::str
         summon(source, tokens);
     } else if (command == "setfood") {
         setFood(source, tokens);
+    } else if (command == "script") {
+        script(source, tokens);
     } else {
         feedback(source, "&cUnknown command: &f" + command);
     }
 }
 
 void CommandManager::help(const std::shared_ptr<Connection>& source) {
-    feedback(source, "&eCommands: &f/help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood");
+    feedback(source, "&eCommands: &f/help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood /script");
 }
 
 void CommandManager::list(const std::shared_ptr<Connection>& source) {
@@ -411,6 +417,32 @@ void CommandManager::setFood(const std::shared_ptr<Connection>& source, const st
     }
     server_.setFoodLevel(*target, *value);
     feedback(source, "&aFood set to &f" + std::to_string(std::clamp(*value, 0, 20)));
+}
+
+void CommandManager::script(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments) {
+    if (arguments.size() < 2) {
+        feedback(source, "&cUsage: /script <reload|run> [oracle]");
+        return;
+    }
+    const std::string action = lower(arguments[1]);
+    if (action == "reload") {
+        if (server_.reloadScripts()) {
+            feedback(source, "&aScripts reloaded");
+        } else {
+            feedback(source, "&cScripts reloaded with errors");
+        }
+        return;
+    }
+    if (action == "run") {
+        if (arguments.size() < 3) {
+            feedback(source, "&cUsage: /script run <oracle>");
+            return;
+        }
+        server_.scripts().fire(arguments[2]);
+        feedback(source, "&aOracle dispatched: &f" + arguments[2]);
+        return;
+    }
+    feedback(source, "&cUnknown script action: &f" + action);
 }
 
 void CommandManager::summon(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments) {

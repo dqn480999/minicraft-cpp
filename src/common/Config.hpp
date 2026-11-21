@@ -52,6 +52,9 @@ struct ServerConfig {
     int chatRateLimitMs{500};
     int maxPacketsPerSecond{2000};
     bool legacyPing{true};
+    bool scriptsEnabled{true};
+    std::string scriptDir{"scripts"};
+    int scriptTickIntervalMs{1000};
     bool debug{false};
     bool color{true};
     std::string listenerName{"minicraft"};

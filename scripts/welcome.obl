@@ -1,0 +1,19 @@
+ARCANA "welcome" {
+    ORACLE @on_join ~> {
+        BIND($a0) ::= SIGIL("&eWelcome to the obelisk");
+        SUMMON(#2);
+        HALT;
+    }
+
+    ORACLE @on_block_break ~> {
+        BIND($r0) ::= $a3 </> #16;
+        VERIFY($r0) <=> #50;
+        WHEN::EQUAL => GATE @torch;
+        GATE @done;
+        @torch::
+        BIND($a0) ::= SIGIL("&6A torch was extinguished");
+        SUMMON(#2);
+        @done::
+        HALT;
+    }
+}

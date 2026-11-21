@@ -1,0 +1,14 @@
+ARCANA "stats" {
+    ORACLE @on_tick ~> {
+        BIND($r0) ::= $a0 <%> #60;
+        VERIFY($r0) <=> #0;
+        WHEN::NOT_EQUAL => GATE @quiet;
+        SUMMON(#3);
+        VERIFY($r0) <=> #0;
+        WHEN::EQUAL => GATE @quiet;
+        BIND($a0) ::= $r0;
+        SUMMON(#1);
+        @quiet::
+        HALT;
+    }
+}

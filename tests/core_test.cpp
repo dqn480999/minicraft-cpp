@@ -14,6 +14,8 @@
 #include "common/Crypto.hpp"
 #include "common/Json.hpp"
 #include "common/Uuid.hpp"
+#include "lang/Compiler.hpp"
+#include "lang/Vm.hpp"
 #include "protocol/Chat.hpp"
 #include "protocol/ItemStack.hpp"
 #include "net/ByteBuffer.hpp"
@@ -257,6 +259,85 @@ void testTorchMigration() {
     expect(chunk.modified(), "torch migration marks modified");
 }
 
+class ScriptProbe final : public mc::lang::ScriptHost {
+public:
+    void broadcastInteger(mc::lang::Word value) override {
+        integers.push_back(value);
+    }
+
+    void broadcastText(const std::string& text) override {
+        texts.push_back(text);
+    }
+
+    mc::lang::Word playerCount() override {
+        return 7;
+    }
+
+    mc::lang::Word currentTimeMs() override {
+        return 1000;
+    }
+
+    mc::lang::Word getBlock(mc::lang::Word, mc::lang::Word, mc::lang::Word) override {
+        return 0;
+    }
+
+    void setBlock(mc::lang::Word, mc::lang::Word, mc::lang::Word, mc::lang::Word) override {
+    }
+
+    void logInteger(mc::lang::Word value) override {
+        integers.push_back(value);
+    }
+
+    std::vector<mc::lang::Word> integers;
+    std::vector<std::string> texts;
+};
+
+void testLanguage() {
+    const std::string source = R"OBL(
+ARCANA "test" {
+    ORACLE @main ~> {
+        BIND($r0) ::= #6;
+        BIND($r1) ::= #4;
+        SCRIBE MEM[$r1 + #0] ::= $r0;
+        REVEAL($r2) ::= MEM[$r1 + #0];
+        BIND($a0) ::= $r2;
+        SUMMON(#1);
+        BIND($r0) ::= #0;
+        BIND($r1) ::= #1;
+        @loop::
+        CALL @add;
+        BIND($r1) ::= $r1 <+> #1;
+        VERIFY($r1) <=> #11;
+        WHEN::LESS => GATE @loop;
+        BIND($a0) ::= $r0;
+        SUMMON(#1);
+        BIND($a0) ::= SIGIL("done");
+        SUMMON(#2);
+        HALT;
+        @add::
+        BIND($r0) ::= $r0 <+> $r1;
+        RETURN;
+    }
+}
+)OBL";
+    mc::lang::Program program;
+    std::string error;
+    expect(mc::lang::Compiler::compileInto(program, source, "inline.obl", error), "language compile " + error);
+    for (const auto& patch : program.callPatches) {
+        const auto target = program.functions.find(patch.name);
+        expect(target != program.functions.end(), "language call target " + patch.name);
+        if (target != program.functions.end()) {
+            program.code[patch.instruction].imm = static_cast<mc::lang::Word>(target->second);
+        }
+    }
+    ScriptProbe host;
+    mc::lang::VirtualMachine vm(program, host);
+    expect(vm.run("main", {}, {}, error), "language run " + error);
+    expect(host.integers.size() == 2 && host.integers[0] == 6 && host.integers[1] == 55,
+           "language arithmetic and memory");
+    expect(host.texts.size() == 1 && host.texts[0] == "done", "language string table");
+}
+
 void testWorldPersistence() {
     const std::filesystem::path directory = "/tmp/minicraft_world_test";
     std::filesystem::remove_all(directory);
@@ -291,6 +372,7 @@ int main() {
     testChatColors();
     testBlockRoundtrip();
     testWorldPersistence();
+    testLanguage();
 
     if (g_failures == 0) {
         std::cout << "core_test PASS\n";

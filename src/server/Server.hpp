@@ -16,6 +16,7 @@
 
 #include "common/Config.hpp"
 #include "common/ThreadPool.hpp"
+#include "lang/ScriptEngine.hpp"
 #include "net/ConnectionHandler.hpp"
 #include "net/TcpServer.hpp"
 #include "protocol/ItemStack.hpp"
@@ -52,6 +53,8 @@ public:
     const ServerConfig& config() const;
     World& world();
     PlayerManager& players();
+    ScriptEngine& scripts();
+    bool reloadScripts();
 
     void sendSystem(Connection& connection, const std::string& message);
     void sendChat(Connection& connection, const std::string& message, std::int8_t position);
@@ -210,6 +213,7 @@ private:
     ThreadPool authPool_;
     TcpServer net_;
     std::unique_ptr<RsaKey> rsaKey_;
+    ScriptEngine scriptEngine_;
 
     std::atomic<bool> running_{false};
     std::atomic<bool> stopped_{false};

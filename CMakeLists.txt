@@ -33,6 +33,10 @@ set(MINICRAFT_CORE_SOURCES
     src/protocol/ItemStack.cpp
     src/world/Chunk.cpp
     src/world/World.cpp
+    src/lang/Lexer.cpp
+    src/lang/Compiler.cpp
+    src/lang/Vm.cpp
+    src/lang/ScriptEngine.cpp
     src/server/PlayerManager.cpp
     src/server/CommandManager.cpp
     src/server/Server.cpp

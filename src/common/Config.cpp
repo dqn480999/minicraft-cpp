@@ -191,6 +191,12 @@ bool Config::applyLine(ServerConfig& config, std::string_view line) {
         config.maxPacketsPerSecond = clampInt(parseInt(value, config.maxPacketsPerSecond), 0, 1000000);
     } else if (key == "legacy-ping") {
         config.legacyPing = parseBool(value, config.legacyPing);
+    } else if (key == "scripts-enabled") {
+        config.scriptsEnabled = parseBool(value, config.scriptsEnabled);
+    } else if (key == "script-dir") {
+        config.scriptDir = value;
+    } else if (key == "script-tick-interval-ms") {
+        config.scriptTickIntervalMs = clampInt(parseInt(value, config.scriptTickIntervalMs), 100, 3600000);
     } else if (key == "debug") {
         config.debug = parseBool(value, config.debug);
     } else if (key == "color") {
