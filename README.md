@@ -22,6 +22,7 @@ The project implements the network protocol, world storage, inventory, survival 
 - passive mobs, villagers and a generated village
 - chat colors and permission commands
 - embedded OBLVN register bytecode for server events
+- native C++ mod loader with a versioned C ABI
 - autosave and server log file
 
 ## Requirements
@@ -101,6 +102,38 @@ ARCANA "welcome" {
 
 The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). The bundled scripts include `welcome.obl`, `stats.obl`, `bitpack.obl`, `bitwise.obl`, `memory_map.obl` and the compile-checked `syntax_test.obl`. Disable scripting with `scripts-enabled=false`.
 
+## C++ mods
+
+The server loads native C++ mods from `mods/*.so` through a versioned C ABI. Mods can register event callbacks, add commands, broadcast chat, inspect players and permissions, and read or modify blocks. The example `mods/hello_mod.cpp` is built as `build/mods/hello_mod.so`.
+
+```cpp
+#include "mod/Mod.hpp"
+
+class MyMod final : public mc::mod::Mod {
+protected:
+    int onInit() override {
+        on("on_join", [this](const mc::mod::Event& event) {
+            broadcast("&eWelcome " + event.asString(0));
+        });
+        command("hello", "Say hello", [this](const mc::mod::CommandContext& context) {
+            broadcast("&aHello from " + context.sender);
+        });
+        return 0;
+    }
+};
+
+MC_MOD(MyMod)
+```
+
+Build the example and copy it into the mod directory:
+
+```bash
+cmake --build build -j
+cp build/mods/hello_mod.so mods/
+```
+
+The full API, lifecycle, event table, command behavior, threading rules, security notes and troubleshooting are in [MODDING.md](MODDING.md). Disable mods with `mods-enabled=false`.
+
 ## Configuration
 
 `config/server.properties` contains the main settings. Important options:
@@ -121,6 +154,7 @@ The syntax reference, instruction set, host calls, event arguments and limits ar
 - `autosave-seconds`
 - `scripts-enabled`, `script-dir`, `script-tick-interval-ms`
 - `script-max-instructions`, `script-trace`, `script-disassemble`
+- `mods-enabled`, `mod-dir`
 - `log-file`
 
 ## Commands
@@ -131,6 +165,7 @@ Player and console commands:
 /help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop
 /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood
 /script reload /script run <oracle>
+/mods
 ```
 
 Administrative commands require operator status. The console always has operator access.
@@ -143,8 +178,10 @@ src/net         buffers, compression, encryption, connections, epoll loops
 src/protocol    chat, authentication, item stacks
 src/world       blocks, chunks, world, persistence
 src/lang        OBLVN lexer, compiler, virtual machine, event engine
+src/mod         C ABI, C++ wrapper, native mod loader
 src/server      server, players, commands, mobs, entities
 scripts         OBLVN event scripts
+mods            C++ mod sources and built modules
 tests           probe client and unit tests
 config          server and test profiles
 ```

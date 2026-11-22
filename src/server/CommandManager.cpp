@@ -126,6 +126,9 @@ void CommandManager::execute(const std::shared_ptr<Connection>& source, std::str
     server_.scripts().fire("on_command",
                            {source ? source->entityId() : 0},
                            {command, join(tokens, 1)});
+    server_.mods().fire("on_command",
+                        {ModValue::string(command), ModValue::string(join(tokens, 1)),
+                         ModValue::integer(source ? source->entityId() : 0)});
 
     if (command == "help") {
         help(source);
@@ -177,13 +180,21 @@ void CommandManager::execute(const std::shared_ptr<Connection>& source, std::str
         setFood(source, tokens);
     } else if (command == "script") {
         script(source, tokens);
+    } else if (command == "mods") {
+        modsList(source);
+    } else if (server_.mods().executeCommand(source ? source->username() : "console",
+                                             source ? source->entityId() : 0,
+                                             source ? server_.isOp(source->username()) : true,
+                                             command,
+                                             join(tokens, 1))) {
+        return;
     } else {
         feedback(source, "&cUnknown command: &f" + command);
     }
 }
 
 void CommandManager::help(const std::shared_ptr<Connection>& source) {
-    feedback(source, "&eCommands: &f/help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood /script");
+    feedback(source, "&eCommands: &f/help /list /info /say /me /gamemode /tp /time /seed /kick /spawn /stop /op /deop /save /cleanup /give /clear /setblock /heal /feed /kill /summon /setfood /script /mods");
 }
 
 void CommandManager::list(const std::shared_ptr<Connection>& source) {
@@ -443,6 +454,18 @@ void CommandManager::script(const std::shared_ptr<Connection>& source, const std
         return;
     }
     feedback(source, "&cUnknown script action: &f" + action);
+}
+
+void CommandManager::modsList(const std::shared_ptr<Connection>& source) {
+    const auto mods = server_.mods().list();
+    if (mods.empty()) {
+        feedback(source, "&eNo mods loaded");
+        return;
+    }
+    feedback(source, "&aLoaded mods (&f" + std::to_string(mods.size()) + "&a):");
+    for (const auto& mod : mods) {
+        feedback(source, "&f- " + mod);
+    }
 }
 
 void CommandManager::summon(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments) {

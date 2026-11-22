@@ -10,3 +10,6 @@ ops-test.txt
 .DS_Store
 *.swp
 *.tmp
+mods/*.so
+mods/*.dylib
+mods/*.dll

@@ -41,6 +41,7 @@ private:
     void summon(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments);
     void setFood(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments);
     void script(const std::shared_ptr<Connection>& source, const std::vector<std::string>& arguments);
+    void modsList(const std::shared_ptr<Connection>& source);
 
     bool requireOp(const std::shared_ptr<Connection>& source);
     void feedback(const std::shared_ptr<Connection>& source, const std::string& message);

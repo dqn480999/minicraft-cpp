@@ -58,6 +58,8 @@ struct ServerConfig {
     int scriptMaxInstructions{200000};
     bool scriptTrace{false};
     bool scriptDisassemble{false};
+    bool modsEnabled{true};
+    std::string modDir{"mods"};
     bool debug{false};
     bool color{true};
     std::string listenerName{"minicraft"};

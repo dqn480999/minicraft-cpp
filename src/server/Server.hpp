@@ -17,6 +17,7 @@
 #include "common/Config.hpp"
 #include "common/ThreadPool.hpp"
 #include "lang/ScriptEngine.hpp"
+#include "mod/ModManager.hpp"
 #include "net/ConnectionHandler.hpp"
 #include "net/TcpServer.hpp"
 #include "protocol/ItemStack.hpp"
@@ -55,6 +56,7 @@ public:
     PlayerManager& players();
     ScriptEngine& scripts();
     bool reloadScripts();
+    ModManager& mods();
 
     void sendSystem(Connection& connection, const std::string& message);
     void sendChat(Connection& connection, const std::string& message, std::int8_t position);
@@ -214,6 +216,7 @@ private:
     TcpServer net_;
     std::unique_ptr<RsaKey> rsaKey_;
     ScriptEngine scriptEngine_;
+    ModManager mods_;
 
     std::atomic<bool> running_{false};
     std::atomic<bool> stopped_{false};

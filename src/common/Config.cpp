@@ -203,6 +203,10 @@ bool Config::applyLine(ServerConfig& config, std::string_view line) {
         config.scriptTrace = parseBool(value, config.scriptTrace);
     } else if (key == "script-disassemble") {
         config.scriptDisassemble = parseBool(value, config.scriptDisassemble);
+    } else if (key == "mods-enabled") {
+        config.modsEnabled = parseBool(value, config.modsEnabled);
+    } else if (key == "mod-dir") {
+        config.modDir = value;
     } else if (key == "debug") {
         config.debug = parseBool(value, config.debug);
     } else if (key == "color") {

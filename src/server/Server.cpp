@@ -517,7 +517,8 @@ Server::Server(ServerConfig config)
       scriptEngine_(*this, ScriptOptions{
           static_cast<lang::Word>(config_.scriptMaxInstructions),
           config_.scriptTrace,
-          config_.scriptDisassemble}) {}
+          config_.scriptDisassemble}),
+      mods_(*this) {}
 
 Server::~Server() {
     stop();
@@ -563,6 +564,14 @@ bool Server::start() {
 
     generateVillage();
     spawnInitialMobs();
+
+    if (config_.modsEnabled) {
+        if (!mods_.loadDirectory(config_.modDir)) {
+            Log::warn("mod loading completed with errors");
+        }
+        mods_.start();
+        mods_.fire("on_server_start");
+    }
 
     if (config_.scriptsEnabled) {
         if (!scriptEngine_.loadDirectory(config_.scriptDir)) {
@@ -630,9 +639,12 @@ void Server::stop() {
     if (tickThread_.joinable()) {
         tickThread_.join();
     }
+    mods_.fire("on_server_stop");
     scriptEngine_.fire("on_server_stop");
     authPool_.stop();
     net_.stop();
+    mods_.stop();
+    mods_.shutdown();
     world_.save();
 #if defined(__GLIBC__)
     malloc_trim(0);
@@ -667,6 +679,10 @@ bool Server::reloadScripts() {
         return true;
     }
     return scriptEngine_.reload(config_.scriptDir);
+}
+
+ModManager& Server::mods() {
+    return mods_;
 }
 
 bool Server::isOp(std::string_view name) const {
@@ -814,6 +830,7 @@ void Server::onClose(Connection& connection) {
     }
     sendLeaveMessage(name);
     scriptEngine_.fire("on_leave", {}, {name});
+    mods_.fire("on_leave", {ModValue::string(name)});
 }
 
 void Server::onLegacyPing(Connection& connection) {
@@ -1074,7 +1091,9 @@ void Server::tickLoop() {
             if (now >= nextScriptTick) {
                 nextScriptTick = now + std::chrono::milliseconds(
                     config_.scriptTickIntervalMs > 0 ? config_.scriptTickIntervalMs : 1000);
-                scriptEngine_.fire("on_tick", {++scriptTicks});
+                const std::int64_t tick = ++scriptTicks;
+                scriptEngine_.fire("on_tick", {tick});
+                mods_.fire("on_tick", {ModValue::integer(tick)});
             }
         }
         nextTick += std::chrono::milliseconds(50);
@@ -1233,6 +1252,8 @@ void Server::updateItems() {
     for (const auto& pickup : pickupEvents) {
         scriptEngine_.fire("on_item_pickup",
                            {pickup.player, pickup.itemId, pickup.count, pickup.damage});
+        mods_.fire("on_item_pickup", {ModValue::integer(pickup.player), ModValue::integer(pickup.itemId),
+                                      ModValue::integer(pickup.count), ModValue::integer(pickup.damage)});
     }
 }
 
@@ -2075,6 +2096,8 @@ void Server::dropItem(Connection& connection, const ItemStack& stack) {
                     std::cos(yaw) * horizontal);
     scriptEngine_.fire("on_item_drop",
                        {connection.entityId(), stack.id, stack.count, stack.damage});
+    mods_.fire("on_item_drop", {ModValue::integer(connection.entityId()), ModValue::integer(stack.id),
+                                ModValue::integer(stack.count), ModValue::integer(stack.damage)});
 }
 
 void Server::dropCursor(Connection& connection, bool dropAll) {
@@ -2414,6 +2437,7 @@ void Server::finishLogin(const std::shared_ptr<Connection>& connection, const Pr
     sendActiveMobs(*connection);
     sendJoinMessage(*connection);
     scriptEngine_.fire("on_join", {entityId}, {profile.name});
+    mods_.fire("on_join", {ModValue::string(profile.name), ModValue::integer(entityId)});
 }
 
 void Server::sendJoinSequence(Connection& connection) {
@@ -2691,6 +2715,9 @@ void Server::applyDamage(Connection& connection, float amount) {
     scriptEngine_.fire("on_player_damage",
                        {connection.entityId(), static_cast<std::int64_t>(amount),
                         static_cast<std::int64_t>(newHealth)});
+    mods_.fire("on_player_damage",
+               {ModValue::integer(connection.entityId()), ModValue::integer(static_cast<std::int64_t>(amount)),
+                ModValue::integer(static_cast<std::int64_t>(newHealth))});
     if (newHealth > 0.0F) {
         return;
     }
@@ -2716,6 +2743,7 @@ void Server::applyDamage(Connection& connection, float amount) {
     broadcastEquipment(connection.shared_from_this());
     Log::info("{} died", connection.username());
     scriptEngine_.fire("on_death", {connection.entityId()}, {connection.username()});
+    mods_.fire("on_death", {ModValue::string(connection.username()), ModValue::integer(connection.entityId())});
 }
 
 void Server::healPlayer(Connection& connection, float amount) {
@@ -2765,6 +2793,7 @@ void Server::handleRespawn(Connection& connection) {
     sendActiveFallingBlocks(connection);
     sendActiveMobs(connection);
     scriptEngine_.fire("on_respawn", {connection.entityId()});
+    mods_.fire("on_respawn", {ModValue::integer(connection.entityId())});
 }
 
 void Server::updateSurvival(Connection& connection) {
@@ -3119,6 +3148,8 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
             }
             broadcastPlayerChat(connection, message);
             scriptEngine_.fire("on_chat", {connection.entityId()}, {connection.username(), message});
+            mods_.fire("on_chat", {ModValue::string(connection.username()), ModValue::string(message),
+                                   ModValue::integer(connection.entityId())});
         }
         break;
     }
@@ -3273,6 +3304,8 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
                 }
                 tryStartFalling(x, y + 1, z);
                 scriptEngine_.fire("on_block_break", {x, y, z, static_cast<std::int64_t>(existing)});
+                mods_.fire("on_block_break", {ModValue::integer(x), ModValue::integer(y),
+                                               ModValue::integer(z), ModValue::integer(existing)});
             }
         }
         break;
@@ -3362,6 +3395,8 @@ void Server::handlePlay(Connection& connection, std::int32_t packetId, ByteBuffe
         }
         tryStartFalling(targetX, targetY, targetZ);
         scriptEngine_.fire("on_block_place", {targetX, targetY, targetZ, static_cast<std::int64_t>(block)});
+        mods_.fire("on_block_place", {ModValue::integer(targetX), ModValue::integer(targetY),
+                                      ModValue::integer(targetZ), ModValue::integer(block)});
         if (mode != 1) {
             connection.takeHeldItem(1);
             broadcastEquipment(connection.shared_from_this());

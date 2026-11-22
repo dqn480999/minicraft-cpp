@@ -38,6 +38,7 @@ set(MINICRAFT_CORE_SOURCES
     src/lang/Disassembler.cpp
     src/lang/Vm.cpp
     src/lang/ScriptEngine.cpp
+    src/mod/ModManager.cpp
     src/server/PlayerManager.cpp
     src/server/CommandManager.cpp
     src/server/Server.cpp
@@ -63,7 +64,7 @@ endif()
 
 target_include_directories(minicraft_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_options(minicraft_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Wno-unused-parameter>)
-target_link_libraries(minicraft_core PUBLIC Threads::Threads ZLIB::ZLIB OpenSSL::Crypto)
+target_link_libraries(minicraft_core PUBLIC Threads::Threads ZLIB::ZLIB OpenSSL::Crypto ${CMAKE_DL_LIBS})
 
 if(CURL_FOUND)
     target_compile_definitions(minicraft_core PUBLIC MINICRAFT_HAVE_CURL=1)
@@ -77,6 +78,17 @@ endif()
 
 add_executable(minicraft src/main.cpp)
 target_link_libraries(minicraft PRIVATE minicraft_core)
+
+option(MINICRAFT_BUILD_EXAMPLE_MOD "Build the example C++ mod" ON)
+if(MINICRAFT_BUILD_EXAMPLE_MOD)
+    add_library(hello_mod MODULE mods/hello_mod.cpp)
+    target_include_directories(hello_mod PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_options(hello_mod PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+    set_target_properties(hello_mod PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "hello_mod"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/mods")
+endif()
 
 option(MINICRAFT_BUILD_PROBE "Build the protocol probe client" ON)
 if(MINICRAFT_BUILD_PROBE)
