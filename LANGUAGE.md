@@ -34,6 +34,8 @@ OBLVN source files use the `.obl` extension. They are compiled when the server s
 24. FAQ
 25. Glossary
 26. Appendix: complete examples
+27. Bit-level cookbook
+28. Low-level script library
 
 ## 1. Introduction
 
@@ -185,6 +187,7 @@ Keywords are uppercase and case-sensitive:
 ```text
 ARCANA ORACLE BIND REVEAL REVEAL8 SCRIBE SCRIBE8 VERIFY GATE WHEN
 CALL RETURN PUSH POP NEGATE COMPLEMENT INCREMENT DECREMENT SWAP
+POPCOUNT LEADING_ZEROS TRAILING_ZEROS BYTESWAP CLZ CTZ BSWAP
 SUMMON TRAP HALT NOP SIGIL MEM MEM8
 ```
 
@@ -295,7 +298,9 @@ reveal8     = "REVEAL8" "(" register ")" "::=" "MEM8" address ";" ;
 scribe      = "SCRIBE" "MEM" address "::=" operand ";" ;
 scribe8     = "SCRIBE8" "MEM8" address "::=" operand ";" ;
 
-unary       = ( "NEGATE" | "COMPLEMENT" | "INCREMENT" | "DECREMENT" )
+unary       = ( "NEGATE" | "COMPLEMENT" | "INCREMENT" | "DECREMENT"
+              | "POPCOUNT" | "LEADING_ZEROS" | "TRAILING_ZEROS"
+              | "BYTESWAP" | "CLZ" | "CTZ" | "BSWAP" )
               "(" register ")" ";" ;
 swap        = "SWAP" "(" register "," register ")" ";" ;
 verify      = "VERIFY" "(" register ")" "<=>" operand ";" ;
@@ -313,7 +318,8 @@ nop         = "NOP" ";" ;
 address     = "[" register [ "+" ( number | register ) ] "]" ;
 operand     = register | number | "SIGIL" "(" string ")" ;
 binary      = "<+>" | "<->" | "<*>" | "</>" | "<%>"
-            | "<&>" | "<|>" | "<^>" | "<<>" | "<>>" ;
+            | "<&>" | "<|>" | "<^>" | "<<>" | "<>>"
+            | "<rol>" | "<ror>" ;
 
 condition   = "EQUAL" | "NOT_EQUAL" | "LESS" | "GREATER"
             | "LESS_OR_EQUAL" | "LESS_EQUAL"
@@ -666,10 +672,12 @@ Operators:
 | `<^>` | bitwise xor |
 | `<<>` | shift left |
 | `<>>` | arithmetic shift right |
+| `<rol>` | rotate left |
+| `<ror>` | rotate right |
 
 Division and remainder by zero trap.
 
-Shifts mask the count to 6 bits. Shifting by 64 is the same as shifting by 0.
+Shifts and rotates mask the count to 6 bits. Shifting or rotating by 64 is the same as by 0.
 
 ### 11.2 REVEAL
 
@@ -843,6 +851,48 @@ SWAP($left, $right);
 ```
 
 Exchanges two registers.
+
+### 11.18.1 POPCOUNT
+
+Syntax:
+
+```obl
+POPCOUNT($register);
+```
+
+Replaces the register with the number of set bits in its 64-bit value. Updates zero and negative flags; clears carry and overflow.
+
+### 11.18.2 LEADING_ZEROS
+
+Syntax:
+
+```obl
+LEADING_ZEROS($register);
+```
+
+Replaces the register with the number of leading zero bits. For zero the result is 64. `CLZ` is an alias.
+
+### 11.18.3 TRAILING_ZEROS
+
+Syntax:
+
+```obl
+TRAILING_ZEROS($register);
+```
+
+Replaces the register with the number of trailing zero bits. For zero the result is 64. `CTZ` is an alias.
+
+### 11.18.4 BYTESWAP
+
+Syntax:
+
+```obl
+BYTESWAP($register);
+```
+
+Reverses the byte order of the 64-bit value. `BSWAP` is an alias.
+
+For example, input `0x0000000000000100` becomes `0x0001000000000000`.
 
 ### 11.19 SUMMON
 
@@ -1064,6 +1114,12 @@ Special operand markers:
 | `XOR` | bitwise |
 | `SHL` | shift |
 | `SHR` | shift |
+| `ROL` | rotate |
+| `ROR` | rotate |
+| `POPCOUNT` | bit inspection |
+| `CLZ` | bit inspection |
+| `CTZ` | bit inspection |
+| `BSWAP` | byte order |
 | `NEG` | unary arithmetic |
 | `NOT` | unary bitwise |
 | `INC` | unary arithmetic |
@@ -1307,6 +1363,96 @@ overflow = false
 ```
 
 On the supported Linux/GCC and Linux/Clang targets this is an arithmetic shift for signed values.
+
+### 13.16.1 ROL
+
+Syntax source: `<rol>`.
+
+Semantics:
+
+```text
+shift = rhs & 63
+result = rotl64((uint64)lhs, shift)
+reg[dst] = (int64)result
+zero/negative updated
+carry = false
+overflow = false
+```
+
+### 13.16.2 ROR
+
+Syntax source: `<ror>`.
+
+Semantics:
+
+```text
+shift = rhs & 63
+result = rotr64((uint64)lhs, shift)
+reg[dst] = (int64)result
+zero/negative updated
+carry = false
+overflow = false
+```
+
+### 13.16.3 POPCOUNT
+
+Syntax source: `POPCOUNT($r);`
+
+Semantics:
+
+```text
+result = popcount64((uint64)reg[dst])
+reg[dst] = result
+zero/negative updated
+carry = false
+overflow = false
+```
+
+### 13.16.4 CLZ
+
+Syntax source: `LEADING_ZEROS($r);` or `CLZ($r);`
+
+Semantics:
+
+```text
+result = countl_zero((uint64)reg[dst])
+reg[dst] = result
+zero/negative updated
+carry = false
+overflow = false
+```
+
+For a zero input the result is 64.
+
+### 13.16.5 CTZ
+
+Syntax source: `TRAILING_ZEROS($r);` or `CTZ($r);`
+
+Semantics:
+
+```text
+result = countr_zero((uint64)reg[dst])
+reg[dst] = result
+zero/negative updated
+carry = false
+overflow = false
+```
+
+For a zero input the result is 64.
+
+### 13.16.6 BSWAP
+
+Syntax source: `BYTESWAP($r);` or `BSWAP($r);`
+
+Semantics:
+
+```text
+result = bswap64((uint64)reg[dst])
+reg[dst] = result
+zero/negative updated
+carry = false
+overflow = false
+```
 
 ### 13.17 NEG
 
@@ -1721,9 +1867,30 @@ Writes the integer to the server log with a script prefix.
 
 Result: none.
 
+### 14.8.1 Host call 8: broadcast labeled integer
+
+```obl
+BIND($a0) ::= SIGIL("&ePlayers:");
+BIND($a1) ::= $r0;
+SUMMON(#8);
+```
+
+Broadcasts a string id followed immediately by the decimal representation of
+`$a1`. This is equivalent to two broadcasts without the intermediate chat
+packet.
+
+Arguments:
+
+- `$a0` string id;
+- `$a1` integer value.
+
+Result: none.
+
+Errors: an id that cannot be resolved traps with `unknown string id`.
+
 ### 14.9 Unknown host calls
 
-Any id other than 1 through 7 traps with `unknown host call <id>`.
+Any id other than 1 through 8 traps with `unknown host call <id>`.
 
 ### 14.10 Host call examples
 
@@ -1981,6 +2148,141 @@ ORACLE @on_tick ~> {
 
 This broadcasts the player count once per minute when at least one player is online.
 
+### 15.9.1 on_server_start
+
+Fires once after script loading finishes and before the tick thread starts.
+
+Arguments: none.
+
+This is the place to initialize memory cells, magic values and version markers.
+
+```obl
+ORACLE @on_server_start ~> {
+    BIND($r0) ::= #0;
+    SCRIBE MEM[$r0 + #0] ::= #1;
+    HALT;
+}
+```
+
+### 15.9.2 on_server_stop
+
+Fires once during shutdown, after the tick thread has stopped and before the
+network layer is closed.
+
+Arguments: none.
+
+Use host call 7 to log final counters. Avoid broadcasts if players are already
+disconnecting.
+
+```obl
+ORACLE @on_server_stop ~> {
+    BIND($r0) ::= #0;
+    REVEAL($a0) ::= MEM[$r0 + #0];
+    SUMMON(#7);
+    HALT;
+}
+```
+
+### 15.9.3 on_player_damage
+
+Fires after a player's health has been reduced and before death processing.
+
+Arguments:
+
+| Register | Value |
+| --- | --- |
+| `$a0` | entity id |
+| `$a1` | damage amount, truncated to an integer |
+| `$a2` | resulting health, truncated to an integer |
+
+Example:
+
+```obl
+ORACLE @on_player_damage ~> {
+    BIND($r0) ::= #0;
+    REVEAL($r1) ::= MEM[$r0 + #0];
+    BIND($r1) ::= $r1 <+> $a1;
+    SCRIBE MEM[$r0 + #0] ::= $r1;
+    HALT;
+}
+```
+
+Damage amounts are floats inside the server. OBLVN receives integer
+truncation, so `2.5` arrives as `2`.
+
+### 15.9.4 on_respawn
+
+Fires after a dead player has respawned.
+
+Arguments:
+
+| Register | Value |
+| --- | --- |
+| `$a0` | entity id |
+
+Example:
+
+```obl
+ORACLE @on_respawn ~> {
+    BIND($r0) ::= #0;
+    REVEAL($r1) ::= MEM[$r0 + #0];
+    INCREMENT($r1);
+    SCRIBE MEM[$r0 + #0] ::= $r1;
+    HALT;
+}
+```
+
+### 15.9.5 on_item_pickup
+
+Fires after a player picks up item entities.
+
+Arguments:
+
+| Register | Value |
+| --- | --- |
+| `$a0` | player entity id |
+| `$a1` | item id |
+| `$a2` | picked up count |
+| `$a3` | item damage |
+
+For a partial pickup, `$a2` is the amount picked up. For a full pickup, it is
+the original stack count.
+
+Example:
+
+```obl
+ORACLE @on_item_pickup ~> {
+    BIND($r0) ::= #0;
+    REVEAL($r1) ::= MEM[$r0 + #0];
+    BIND($r1) ::= $r1 <+> $a2;
+    SCRIBE MEM[$r0 + #0] ::= $r1;
+    HALT;
+}
+```
+
+### 15.9.6 on_item_drop
+
+Fires after a player drops an item entity.
+
+Arguments:
+
+| Register | Value |
+| --- | --- |
+| `$a0` | player entity id |
+| `$a1` | item id |
+| `$a2` | dropped count |
+| `$a3` | item damage |
+
+Example:
+
+```obl
+ORACLE @on_item_drop ~> {
+    BIND($a0) ::= SIGIL("&7Item dropped");
+    SUMMON(#2);
+    HALT;
+}
+```
+
 ### 15.10 Multiple files
 
 If two files define `on_join`, both run. Each file has its own memory and string table. The order is the sorted file order used during loading.
@@ -2009,6 +2311,12 @@ A runtime trap in one event oracle does not crash the server and does not stop o
 | `on_death` | yes, inventory dropped and death state set |
 | `on_command` | no, fires before command dispatch |
 | `on_tick` | not applicable |
+| `on_server_start` | yes, scripts loaded |
+| `on_server_stop` | yes, tick thread stopped, network still open |
+| `on_player_damage` | health reduced, death not processed yet |
+| `on_respawn` | respawn sequence complete |
+| `on_item_pickup` | item collection applied |
+| `on_item_drop` | item entity spawned |
 
 ## 16. Error catalog
 
@@ -2294,7 +2602,7 @@ Fix: reduce recursion or convert the algorithm to loops and memory.
 
 #### unknown string id
 
-Cause: host call 2 received an id that is neither in the compile-time string table nor in the runtime string table.
+Cause: host call 2 or host call 8 received an id that is neither in the compile-time string table nor in the runtime string table.
 
 Fix: use `SIGIL("...")` or a runtime string id supplied by an event.
 
@@ -2302,7 +2610,7 @@ Fix: use `SIGIL("...")` or a runtime string id supplied by an event.
 
 Cause: `SUMMON(#id)` used an unsupported id.
 
-Fix: use ids 1 through 7.
+Fix: use ids 1 through 8.
 
 #### trap
 
@@ -3321,6 +3629,12 @@ Existing configuration files remain valid; missing keys use defaults.
 
 The disassembler is new. Enable `script-disassemble=true` and `debug=true` to inspect compiled programs.
 
+### 23.8 New bit operations and events
+
+OBLVN 2 also adds `POPCOUNT`, `LEADING_ZEROS`, `TRAILING_ZEROS`, `BYTESWAP`, `<rol>` and `<ror>`, host call 8, and the events `on_server_start`, `on_server_stop`, `on_player_damage`, `on_respawn`, `on_item_pickup` and `on_item_drop`.
+
+Existing scripts do not need changes for these additions.
+
 ## 24. FAQ
 
 ### 24.1 How do I write a comment?
@@ -3576,6 +3890,7 @@ The index of the current instruction, abbreviated `pc` in error messages.
 | 5 | `$a0` x, `$a1` y, `$a2` z | `$r0` | get block state |
 | 6 | `$a0` x, `$a1` y, `$a2` z, `$a3` state | none | set block |
 | 7 | `$a0` value | none | log integer |
+| 8 | `$a0` string id, `$a1` value | none | broadcast labeled integer |
 
 ### 26.4 Event quick reference
 
@@ -3589,6 +3904,12 @@ The index of the current instruction, abbreviated `pc` in error messages.
 | `on_death` | name string | entity id | | |
 | `on_command` | command string | argument string | entity id | |
 | `on_tick` | tick counter | | | |
+| `on_server_start` | | | | |
+| `on_server_stop` | | | | |
+| `on_player_damage` | entity id | damage | new health | |
+| `on_respawn` | entity id | | | |
+| `on_item_pickup` | player entity | item id | count | damage |
+| `on_item_drop` | player entity | item id | count | damage |
 
 ### 26.5 Configuration quick reference
 
@@ -3634,7 +3955,7 @@ The index of the current instruction, abbreviated `pc` in error messages.
 | `stack underflow` | pop from empty data stack |
 | `call stack overflow` | too much recursion |
 | `unknown string id` | host call 2 with a bad id |
-| `unknown host call` | host id outside 1..7 |
+| `unknown host call` | host id outside 1..8 |
 | `trap` | explicit TRAP |
 
 ### 26.8 Complete example: counter and announcer
@@ -3759,3 +4080,524 @@ ARCANA "flags_demo" {
 ### 26.12 Document status
 
 This reference describes OBLVN 2 as implemented in `src/lang/`. If behavior and this document disagree, the implementation is authoritative, and the document should be corrected.
+
+## 27. Bit-level cookbook
+
+This chapter collects practical bit and address patterns. OBLVN exposes only 64-bit integers, but that is enough for bit fields, packed records, bitmaps, checksums and low-level memory layouts.
+
+### 27.1 Bit numbering
+
+Bit 0 is the least significant bit. Bit 63 is the most significant bit.
+
+The mask for bit `n` is:
+
+```text
+mask = 1 << (n & 63)
+```
+
+In OBLVN:
+
+```obl
+BIND($r0) ::= #1;
+BIND($r1) ::= #n;
+BIND($r0) ::= $r0 <<> $r1;
+```
+
+### 27.2 Test a bit
+
+```obl
+BIND($r0) ::= #1;
+BIND($r0) ::= $r0 <<> #5;
+BIND($r1) ::= $r2 <&> $r0;
+VERIFY($r1) <=> #0;
+WHEN::EQUAL => GATE @clear;
+GATE @set;
+```
+
+The value being tested is assumed to be in `$r2`. `VERIFY` against zero is the safe way to test a masked value.
+
+### 27.3 Set a bit
+
+```obl
+BIND($r0) ::= #1;
+BIND($r0) ::= $r0 <<> #5;
+BIND($r1) ::= $r1 <|> $r0;
+```
+
+### 27.4 Clear a bit
+
+```obl
+BIND($r0) ::= #1;
+BIND($r0) ::= $r0 <<> #5;
+BIND($r0) ::= $r0 <^> #-1;
+BIND($r1) ::= $r1 <&> $r0;
+```
+
+`COMPLEMENT($r0)` is equivalent to `BIND($r0) ::= $r0 <^> #-1;` and is easier to read.
+
+### 27.5 Toggle a bit
+
+```obl
+BIND($r0) ::= #1;
+BIND($r0) ::= $r0 <<> #5;
+BIND($r1) ::= $r1 <^> $r0;
+```
+
+### 27.6 Extract a bit field
+
+```obl
+BIND($r0) ::= $r1;
+BIND($r0) ::= $r0 <>> #8;
+BIND($r0) ::= $r0 <&> #255;
+```
+
+This extracts bits 8 through 15 of the value in `$r1` as an unsigned value.
+
+### 27.7 Insert a bit field
+
+```obl
+BIND($r0) ::= #255;
+BIND($r0) ::= $r0 <<> #8;
+BIND($r0) ::= $r0 <^> #-1;
+BIND($r1) ::= $r1 <&> $r0;
+BIND($r2) ::= $r2 <&> #255;
+BIND($r2) ::= $r2 <<> #8;
+BIND($r1) ::= $r1 <|> $r2;
+```
+
+`$r1` is the target word and `$r2` is the field value.
+
+The mask clears the target field, then the shifted value is ORed in.
+
+### 27.8 Count bits
+
+```obl
+POPCOUNT($r0);
+```
+
+Use this for Hamming weight, parity checks and coverage tests. Parity is the low bit of the popcount:
+
+```obl
+POPCOUNT($r0);
+BIND($r1) ::= $r0 <&> #1;
+```
+
+### 27.9 Find the lowest set bit
+
+```obl
+TRAILING_ZEROS($r0);
+```
+
+If the value is zero, the result is 64. Use that as an explicit empty case:
+
+```obl
+TRAILING_ZEROS($r0);
+VERIFY($r0) <=> #64;
+WHEN::EQUAL => GATE @empty;
+```
+
+### 27.10 Find the highest set bit
+
+```obl
+LEADING_ZEROS($r0);
+BIND($r1) ::= #63;
+BIND($r0) ::= $r1 <-> $r0;
+```
+
+For zero, this yields `-1` because clz returns 64. Check for zero first if that matters.
+
+### 27.11 Byte order
+
+```obl
+BYTESWAP($r0);
+```
+
+Use this when storing protocol-style big-endian integers in memory or when hashing bytes. Native memory cells are host-endian 64-bit values; byte operations always address the low 8 bits, so a consistent byte order should be chosen by the script.
+
+### 27.12 Rotations
+
+```obl
+BIND($r0) ::= $r0 <rol> #7;
+BIND($r0) ::= $r0 <ror> #7;
+```
+
+Rotations are useful for hash mixing and for circular buffers of bit fields.
+
+### 27.13 Pack four bytes into one word
+
+```obl
+BIND($r0) ::= $a0 <&> #255;
+BIND($r0) ::= $r0 <<> #24;
+BIND($r1) ::= $a1 <&> #255;
+BIND($r1) ::= $r1 <<> #16;
+BIND($r2) ::= $a2 <&> #255;
+BIND($r2) ::= $r2 <<> #8;
+BIND($r3) ::= $a3 <&> #255;
+BIND($r0) ::= $r0 <|> $r1;
+BIND($r0) ::= $r0 <|> $r2;
+BIND($r0) ::= $r0 <|> $r3;
+```
+
+### 27.14 Unpack four bytes from one word
+
+```obl
+BIND($r1) ::= $r0 <>> #24;
+BIND($r1) ::= $r1 <&> #255;
+BIND($r2) ::= $r0 <>> #16;
+BIND($r2) ::= $r2 <&> #255;
+BIND($r3) ::= $r0 <>> #8;
+BIND($r3) ::= $r3 <&> #255;
+BIND($r4) ::= $r0 <&> #255;
+```
+
+### 27.15 Pack coordinates
+
+Minecraft coordinates can be negative. Masking to 8 bits stores only the low byte:
+
+```obl
+BIND($r0) ::= $a0 <&> #255;
+BIND($r0) ::= $r0 <<> #24;
+BIND($r1) ::= $a1 <&> #255;
+BIND($r1) ::= $r1 <<> #16;
+BIND($r2) ::= $a2 <&> #255;
+BIND($r2) ::= $r2 <<> #8;
+BIND($r3) ::= $a3 <&> #255;
+BIND($r0) ::= $r0 <|> $r1;
+BIND($r0) ::= $r0 <|> $r2;
+BIND($r0) ::= $r0 <|> $r3;
+```
+
+This is a lossy local pack, useful for audit logs near spawn. It is not a general coordinate encoding.
+
+### 27.16 Bitmap of 128 items
+
+Use two 64-bit cells. The cell index is `bit / 64`, the bit position is `bit % 64`.
+
+```obl
+BIND($r0) ::= $itemId <&> #127;
+BIND($r1) ::= $r0 <>> #6;
+BIND($r1) ::= $r1 <+> #40;
+BIND($r2) ::= #1;
+BIND($r3) ::= $r0 <&> #63;
+BIND($r2) ::= $r2 <<> $r3;
+REVEAL($r4) ::= MEM[$r1 + #0];
+BIND($r4) ::= $r4 <|> $r2;
+SCRIBE MEM[$r1 + #0] ::= $r4;
+```
+
+The words live at cells 40 and 41.
+
+### 27.17 Bitmap of 4096 bits
+
+Use 64 cells of 64 bits each:
+
+```text
+word = bit >> 6
+mask = 1 << (bit & 63)
+address = base + word
+```
+
+Always validate or mask the bit index so the final address stays in range.
+
+### 27.18 Byte array
+
+Use `MEM8` with consecutive addresses:
+
+```obl
+BIND($r0) ::= #0;
+SCRIBE8 MEM8[$r0 + #0] ::= #10;
+SCRIBE8 MEM8[$r0 + #1] ::= #20;
+SCRIBE8 MEM8[$r0 + #2] ::= #30;
+```
+
+Each write clears the upper bits of one 64-bit cell. Reading uses zero extension.
+
+### 27.19 Word array
+
+Use `MEM` with consecutive addresses:
+
+```obl
+BIND($r0) ::= #16;
+SCRIBE MEM[$r0 + #0] ::= #100;
+SCRIBE MEM[$r0 + #1] ::= #200;
+SCRIBE MEM[$r0 + #2] ::= #300;
+```
+
+Cells are not bytes. Cell 16 is a different cell from byte 16.
+
+### 27.20 XOR checksum
+
+```obl
+BIND($r0) ::= #0;
+BIND($r1) ::= #0;
+BIND($r3) ::= #0;
+@loop::
+REVEAL($r2) ::= MEM[$r0 + $r1];
+BIND($r3) ::= $r3 <^> $r2;
+INCREMENT($r1);
+VERIFY($r1) <=> #32;
+WHEN::LESS => GATE @loop;
+```
+
+XOR checksums are order-insensitive and cheap. Use a weighted sum if order matters.
+
+### 27.21 FNV-like hash
+
+OBLVN has no 32-bit overflow control beyond masking. A simple 64-bit hash:
+
+```obl
+BIND($r0) ::= #1469598103934665603;
+BIND($r0) ::= $r0 <^> $r1;
+BIND($r0) ::= $r0 <*> #1099511628211;
+```
+
+`$r0` is the hash and `$r1` is the next byte. The multiplication wraps. This is not cryptographic and should not be used for security.
+
+### 27.22 Align an address
+
+Align down to 16 cells, with the address in `$r0`:
+
+```obl
+BIND($r0) ::= $r0 <&> #-16;
+```
+
+Align up to 16 cells:
+
+```obl
+BIND($r0) ::= $r0 <+> #15;
+BIND($r0) ::= $r0 <&> #-16;
+```
+
+### 27.23 Test power of two
+
+```obl
+BIND($r2) ::= $r1 <-> #1;
+BIND($r2) ::= $r1 <&> $r2;
+VERIFY($r2) <=> #0;
+WHEN::EQUAL => GATE @power_of_two;
+```
+
+`$r1` holds the value. This is true for positive powers of two and for zero if zero is not excluded. Exclude zero first.
+
+### 27.24 Swap two memory cells
+
+```obl
+REVEAL($r2) ::= MEM[$r0 + #0];
+REVEAL($r3) ::= MEM[$r1 + #0];
+SCRIBE MEM[$r0 + #0] ::= $r3;
+SCRIBE MEM[$r1 + #0] ::= $r2;
+```
+
+`$r0` and `$r1` hold the two addresses.
+
+### 27.25 Safe bit index
+
+```obl
+BIND($r0) ::= $a0 <&> #63;
+```
+
+Masking is not the same as validation. Masking folds bad indexes into range; validation rejects them:
+
+```obl
+BIND($r0) ::= $a0;
+VERIFY($r0) <=> #64;
+WHEN::GREATER_OR_EQUAL => GATE @bad;
+```
+
+### 27.26 Memory map discipline
+
+Keep a table outside the script:
+
+| Address | Size | Meaning |
+| --- | --- | --- |
+| 0 | 1 | event counter |
+| 1 | 1 | place counter |
+| 32 | 1 | picked up items |
+| 33 | 1 | last item id |
+| 40 | 2 | 128-bit item bitmap |
+| 64 | 16 | block break ring buffer |
+| 80 | 16 | block place ring buffer |
+| 96 | 1 | magic value |
+| 97 | 1 | layout version |
+| 200 | 1 | respawn counter |
+| 201 | 1 | total damage |
+| 202 | 1 | max damage |
+| 203 | 1 | dropped items |
+
+The sample scripts use this layout.
+
+### 27.27 Ring buffer
+
+```obl
+BIND($r0) ::= #0;
+REVEAL($r1) ::= MEM[$r0 + #0];
+INCREMENT($r1);
+SCRIBE MEM[$r0 + #0] ::= $r1;
+BIND($r2) ::= $r1 <&> #15;
+BIND($r3) ::= #64;
+SCRIBE MEM[$r3 + $r2] ::= $r4;
+```
+
+`$r4` holds the value being written.
+
+The index wraps with `& 15`, so writes cycle through 16 cells.
+
+### 27.28 Bit-level debugging
+
+Broadcast a value in decimal with host call 1 or a labeled value with host call 8:
+
+```obl
+BIND($a0) ::= SIGIL("&evalue=");
+BIND($a1) ::= $r0;
+SUMMON(#8);
+```
+
+There is no hexadecimal formatting host call. To inspect bits, compare masks and broadcast booleans or popcounts.
+
+## 28. Low-level script library
+
+The repository ships several scripts that exercise the low-level features. They are loaded automatically when `script-dir=scripts`.
+
+### 28.1 scripts/bitpack.obl
+
+`bitpack.obl` is an event-driven bit-packing audit script.
+
+Features:
+
+- initializes a magic value and layout version at addresses 96 and 97;
+- packs block break events into a 16-cell ring buffer at 64..79;
+- packs block place events into a ring buffer at 80..95;
+- counts picked up items at 32 and records the last item id at 33;
+- sets a bit in a 128-bit item bitmap at cells 40..41;
+- computes an XOR checksum over 32 buffer cells every 600 script ticks;
+- uses `POPCOUNT` and `BYTESWAP` on the checksum;
+- broadcasts the results with host call 8;
+- logs the block break count at shutdown with host call 7.
+
+No chat message is sent for normal block events. The checksum message appears once per 600 script ticks, which is every 10 minutes with the default interval.
+
+Example packing:
+
+```obl
+BIND($r0) ::= $a0 <&> #255;
+BIND($r0) ::= $r0 <<> #24;
+```
+
+Coordinates are packed as four bytes in one 64-bit cell.
+
+### 28.2 scripts/bitwise.obl
+
+`bitwise.obl` is a set of non-event test oracles.
+
+`test_bitwise` demonstrates:
+
+- `POPCOUNT`;
+- `LEADING_ZEROS`;
+- `TRAILING_ZEROS`;
+- `BYTESWAP`;
+- rotate left and rotate right.
+
+`test_bitfields` demonstrates:
+
+- creating a mask with a shift;
+- setting a bit with OR;
+- testing a bit with AND and `VERIFY`;
+- clearing a bit with AND and complement;
+- toggling a bit with XOR.
+
+Run them manually:
+
+```text
+/script run test_bitwise
+/script run test_bitfields
+```
+
+They are not event oracles, so they do not run on server events.
+
+### 28.3 scripts/memory_map.obl
+
+`memory_map.obl` is an event-driven memory map example.
+
+Event handlers:
+
+- `on_respawn` increments the respawn counter at 200;
+- `on_player_damage` adds damage to 201 and tracks the maximum at 202;
+- `on_item_drop` adds dropped counts to 203;
+- `test_table` fills 16 cells with an arithmetic sequence and sums them with an index register.
+
+Run:
+
+```text
+/script run test_table
+```
+
+This broadcasts a labeled sum with host call 8.
+
+### 28.4 scripts/syntax_test.obl
+
+`syntax_test.obl` is the compile-checked syntax showcase. It includes every statement family, including the new bit operations and rotate operators.
+
+It has no event oracles. Run oracles manually:
+
+```text
+/script run arithmetic
+/script run memory
+/script run conditions
+/script run calls
+/script run host_calls
+```
+
+`trap_form` intentionally traps if run.
+
+### 28.5 Relationship to server events
+
+These files use the following server events:
+
+| Event | Example file |
+| --- | --- |
+| `on_server_start` | `bitpack.obl` |
+| `on_server_stop` | `bitpack.obl` |
+| `on_block_break` | `bitpack.obl` |
+| `on_block_place` | `bitpack.obl` |
+| `on_item_pickup` | `bitpack.obl` |
+| `on_item_drop` | `memory_map.obl` |
+| `on_player_damage` | `memory_map.obl` |
+| `on_respawn` | `memory_map.obl` |
+| `on_join` | `welcome.obl` |
+| `on_chat` | none by default |
+| `on_tick` | `stats.obl`, `bitpack.obl` |
+
+Adding a file with an event oracle makes that oracle part of the running server after the next reload.
+
+### 28.6 Extending the library
+
+When adding a low-level script:
+
+1. Choose a non-overlapping memory map.
+2. Define event oracles only for intentional behavior.
+3. Keep chat broadcasts rare.
+4. Validate or mask indexes before memory access.
+5. Use `MEM8` for byte arrays and `MEM` for word arrays.
+6. Use host call 7 for audit logs and host call 8 for labeled summaries.
+7. Test with `/script run` first.
+8. Reload and check the load count.
+
+### 28.7 Full memory map of the sample scripts
+
+| Address | Owner |
+| --- | --- |
+| 0 | `bitpack.obl` block break counter |
+| 1 | `bitpack.obl` block place counter |
+| 32 | `bitpack.obl` picked up item count |
+| 33 | `bitpack.obl` last item id |
+| 40..41 | `bitpack.obl` item bitmap |
+| 64..79 | `bitpack.obl` block break ring |
+| 80..95 | `bitpack.obl` block place ring |
+| 96 | `bitpack.obl` magic |
+| 97 | `bitpack.obl` version |
+| 200 | `memory_map.obl` respawn counter |
+| 201 | `memory_map.obl` total damage |
+| 202 | `memory_map.obl` maximum damage |
+| 203 | `memory_map.obl` dropped items |
+
+Each file has its own memory, so these addresses do not overlap across files. They would overlap if merged into one file.

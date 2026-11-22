@@ -271,6 +271,10 @@ public:
         texts.push_back(text);
     }
 
+    void broadcastLabeledInteger(std::string_view label, mc::lang::Word value) override {
+        labels.push_back(std::string(label) + std::to_string(value));
+    }
+
     mc::lang::Word playerCount() override {
         return 7;
     }
@@ -295,6 +299,7 @@ public:
 
     std::vector<mc::lang::Word> integers;
     std::vector<std::string> texts;
+    std::vector<std::string> labels;
 };
 
 void testLanguage() {
@@ -367,6 +372,39 @@ ARCANA "test" {
         SUMMON(#1);
         RETURN;
     }
+
+    ORACLE @bits ~> {
+        BIND($r0) ::= #9;
+        POPCOUNT($r0);
+        BIND($a0) ::= SIGIL("pop=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #8;
+        LEADING_ZEROS($r0);
+        BIND($a0) ::= SIGIL("clz=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #8;
+        TRAILING_ZEROS($r0);
+        BIND($a0) ::= SIGIL("ctz=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #1;
+        BYTESWAP($r0);
+        BIND($a0) ::= SIGIL("bswap=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #1;
+        BIND($r0) ::= $r0 <rol> #1;
+        BIND($a0) ::= SIGIL("rol=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= $r0 <ror> #1;
+        BIND($a0) ::= SIGIL("ror=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        RETURN;
+    }
 }
 )OBL";
     mc::lang::Program program;
@@ -388,6 +426,16 @@ ARCANA "test" {
     expect(vm.run("persist", {}, {}, error), "language persist second " + error);
     expect(vm.run("bytes", {}, {}, error), "language byte memory " + error);
     expect(vm.run("flags", {}, {}, error), "language flags " + error);
+    expect(vm.run("bits", {}, {}, error), "language bit ops " + error);
+    const std::vector<std::string> expectedLabels = {
+        "pop=2",
+        "clz=60",
+        "ctz=3",
+        "bswap=72057594037927936",
+        "rol=2",
+        "ror=1",
+    };
+    expect(host.labels == expectedLabels, "language bit labels");
     expect(host.integers.size() == 9, "language host count");
     if (host.integers.size() == 9) {
         expect(host.integers[0] == 6 && host.integers[1] == 55, "language arithmetic");

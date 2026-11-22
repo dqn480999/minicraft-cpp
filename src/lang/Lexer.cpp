@@ -15,9 +15,11 @@ bool isIdentifierBody(char c) {
     return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
 }
 
-const std::array<std::pair<std::string_view, std::string_view>, 16> kSymbols = {{
+const std::array<std::pair<std::string_view, std::string_view>, 18> kSymbols = {{
     {"::=", "::="},
     {"<=>", "<=>"},
+    {"<rol>", "<rol>"},
+    {"<ror>", "<ror>"},
     {"<+>", "<+>"},
     {"<->", "<->"},
     {"<*>", "<*>"},

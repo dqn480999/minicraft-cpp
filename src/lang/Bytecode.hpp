@@ -30,6 +30,12 @@ enum class Op : std::uint8_t {
     Xor,
     Shl,
     Shr,
+    Rol,
+    Ror,
+    Popcount,
+    Clz,
+    Ctz,
+    Bswap,
     Neg,
     Not,
     Inc,
@@ -76,6 +82,12 @@ inline constexpr const char* opName(Op op) {
     case Op::Xor: return "XOR";
     case Op::Shl: return "SHL";
     case Op::Shr: return "SHR";
+    case Op::Rol: return "ROL";
+    case Op::Ror: return "ROR";
+    case Op::Popcount: return "POPCOUNT";
+    case Op::Clz: return "CLZ";
+    case Op::Ctz: return "CTZ";
+    case Op::Bswap: return "BSWAP";
     case Op::Neg: return "NEG";
     case Op::Not: return "NOT";
     case Op::Inc: return "INC";

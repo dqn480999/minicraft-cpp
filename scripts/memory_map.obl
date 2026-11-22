@@ -1,0 +1,55 @@
+ARCANA "memory_map" {
+    ORACLE @on_respawn ~> {
+        BIND($r0) ::= #200;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        INCREMENT($r1);
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        HALT;
+    }
+
+    ORACLE @on_player_damage ~> {
+        BIND($r0) ::= #201;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        BIND($r1) ::= $r1 <+> $a1;
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        BIND($r0) ::= #202;
+        REVEAL($r2) ::= MEM[$r0 + #0];
+        VERIFY($a1) <=> $r2;
+        WHEN::LESS_OR_EQUAL => GATE @done;
+        SCRIBE MEM[$r0 + #0] ::= $a1;
+        @done::
+        HALT;
+    }
+
+    ORACLE @on_item_drop ~> {
+        BIND($r0) ::= #203;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        BIND($r1) ::= $r1 <+> $a2;
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        HALT;
+    }
+
+    ORACLE @test_table ~> {
+        BIND($r0) ::= #0;
+        BIND($r1) ::= #0;
+        @fill::
+        BIND($r2) ::= $r1 <*> #7;
+        BIND($r2) ::= $r2 <+> #3;
+        SCRIBE MEM[$r0 + $r1] ::= $r2;
+        INCREMENT($r1);
+        VERIFY($r1) <=> #16;
+        WHEN::LESS => GATE @fill;
+        BIND($r1) ::= #0;
+        BIND($r3) ::= #0;
+        @sum::
+        REVEAL($r2) ::= MEM[$r0 + $r1];
+        BIND($r3) ::= $r3 <+> $r2;
+        INCREMENT($r1);
+        VERIFY($r1) <=> #16;
+        WHEN::LESS => GATE @sum;
+        BIND($a0) ::= SIGIL("table sum=");
+        BIND($a1) ::= $r3;
+        SUMMON(#8);
+        RETURN;
+    }
+}

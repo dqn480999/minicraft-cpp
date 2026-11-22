@@ -83,6 +83,8 @@ std::string disassemble(const Program& program) {
         case Op::Xor:
         case Op::Shl:
         case Op::Shr:
+        case Op::Rol:
+        case Op::Ror:
         case Op::Cmp:
             text += operand(instruction.dst) + ", ";
             text += instruction.src == kImmediate
@@ -93,6 +95,10 @@ std::string disassemble(const Program& program) {
         case Op::Not:
         case Op::Inc:
         case Op::Dec:
+        case Op::Popcount:
+        case Op::Clz:
+        case Op::Ctz:
+        case Op::Bswap:
         case Op::Push:
         case Op::Pop:
             text += operand(instruction.dst);

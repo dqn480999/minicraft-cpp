@@ -17,6 +17,12 @@ ARCANA "syntax_test" {
         COMPLEMENT($r3);
         INCREMENT($r3);
         DECREMENT($r3);
+        POPCOUNT($r3);
+        LEADING_ZEROS($r3);
+        TRAILING_ZEROS($r3);
+        BYTESWAP($r3);
+        BIND($r3) ::= $r3 <rol> #3;
+        BIND($r3) ::= $r3 <ror> #3;
         SWAP($r3, $r4);
         BIND($r0) ::= $a0 <+> $a1;
         RETURN;

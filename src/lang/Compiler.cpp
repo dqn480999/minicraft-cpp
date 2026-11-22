@@ -203,7 +203,8 @@ private:
             emit(instruction);
             return true;
         }
-        if (keyword == "NEGATE" || keyword == "COMPLEMENT" || keyword == "INCREMENT" || keyword == "DECREMENT") {
+        const auto unary = unaryOp(keyword);
+        if (unary) {
             advance();
             const auto reg = parseParenthesizedRegister(error);
             if (!reg) {
@@ -214,15 +215,7 @@ private:
             }
             Instruction instruction;
             instruction.dst = *reg;
-            if (keyword == "NEGATE") {
-                instruction.op = Op::Neg;
-            } else if (keyword == "COMPLEMENT") {
-                instruction.op = Op::Not;
-            } else if (keyword == "INCREMENT") {
-                instruction.op = Op::Inc;
-            } else {
-                instruction.op = Op::Dec;
-            }
+            instruction.op = *unary;
             emit(instruction);
             return true;
         }
@@ -606,6 +599,34 @@ private:
         }
     }
 
+    static std::optional<Op> unaryOp(const std::string& keyword) {
+        if (keyword == "NEGATE") {
+            return Op::Neg;
+        }
+        if (keyword == "COMPLEMENT") {
+            return Op::Not;
+        }
+        if (keyword == "INCREMENT") {
+            return Op::Inc;
+        }
+        if (keyword == "DECREMENT") {
+            return Op::Dec;
+        }
+        if (keyword == "POPCOUNT") {
+            return Op::Popcount;
+        }
+        if (keyword == "LEADING_ZEROS" || keyword == "CLZ") {
+            return Op::Clz;
+        }
+        if (keyword == "TRAILING_ZEROS" || keyword == "CTZ") {
+            return Op::Ctz;
+        }
+        if (keyword == "BYTESWAP" || keyword == "BSWAP") {
+            return Op::Bswap;
+        }
+        return std::nullopt;
+    }
+
     static Op binaryOp(const std::string& symbol) {
         if (symbol == "<+>") {
             return Op::Add;
@@ -633,6 +654,12 @@ private:
         }
         if (symbol == "<<>") {
             return Op::Shl;
+        }
+        if (symbol == "<rol>") {
+            return Op::Rol;
+        }
+        if (symbol == "<ror>") {
+            return Op::Ror;
         }
         return Op::Shr;
     }
@@ -696,7 +723,7 @@ private:
         const std::string& text = current().text;
         return text == "<+>" || text == "<->" || text == "<*>" || text == "</>"
             || text == "<%>" || text == "<&>" || text == "<|>" || text == "<^>"
-            || text == "<<>" || text == "<>>";
+            || text == "<<>" || text == "<>>" || text == "<rol>" || text == "<ror>";
     }
 
     std::optional<std::uint8_t> parseRegister() {

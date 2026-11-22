@@ -1,5 +1,6 @@
 #include "lang/Vm.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <limits>
 #include <string>
@@ -203,7 +204,9 @@ bool VirtualMachine::run(const std::string& function,
         case Op::Or:
         case Op::Xor:
         case Op::Shl:
-        case Op::Shr: {
+        case Op::Shr:
+        case Op::Rol:
+        case Op::Ror: {
             const Word lhs = registers_[instruction.dst];
             const Word rhs = instruction.src == kImmediate ? instruction.imm : registers_[instruction.src];
             Word result = 0;
@@ -271,6 +274,20 @@ bool VirtualMachine::run(const std::string& function,
                 carry_ = false;
                 overflow_ = false;
                 break;
+            case Op::Rol:
+                result = static_cast<Word>(std::rotl(
+                    static_cast<std::uint64_t>(lhs), static_cast<int>(static_cast<std::uint64_t>(rhs) & 63U)));
+                setZeroNegative(result);
+                carry_ = false;
+                overflow_ = false;
+                break;
+            case Op::Ror:
+                result = static_cast<Word>(std::rotr(
+                    static_cast<std::uint64_t>(lhs), static_cast<int>(static_cast<std::uint64_t>(rhs) & 63U)));
+                setZeroNegative(result);
+                carry_ = false;
+                overflow_ = false;
+                break;
             default:
                 break;
             }
@@ -286,6 +303,39 @@ bool VirtualMachine::run(const std::string& function,
         }
         case Op::Not: {
             const Word result = ~registers_[instruction.dst];
+            registers_[instruction.dst] = result;
+            setZeroNegative(result);
+            carry_ = false;
+            overflow_ = false;
+            break;
+        }
+        case Op::Popcount: {
+            const Word result = static_cast<Word>(std::popcount(static_cast<std::uint64_t>(registers_[instruction.dst])));
+            registers_[instruction.dst] = result;
+            setZeroNegative(result);
+            carry_ = false;
+            overflow_ = false;
+            break;
+        }
+        case Op::Clz: {
+            const Word result = static_cast<Word>(std::countl_zero(static_cast<std::uint64_t>(registers_[instruction.dst])));
+            registers_[instruction.dst] = result;
+            setZeroNegative(result);
+            carry_ = false;
+            overflow_ = false;
+            break;
+        }
+        case Op::Ctz: {
+            const Word result = static_cast<Word>(std::countr_zero(static_cast<std::uint64_t>(registers_[instruction.dst])));
+            registers_[instruction.dst] = result;
+            setZeroNegative(result);
+            carry_ = false;
+            overflow_ = false;
+            break;
+        }
+        case Op::Bswap: {
+            const Word result = static_cast<Word>(__builtin_bswap64(
+                static_cast<unsigned long long>(registers_[instruction.dst])));
             registers_[instruction.dst] = result;
             setZeroNegative(result);
             carry_ = false;
@@ -440,6 +490,14 @@ bool VirtualMachine::run(const std::string& function,
             case 7:
                 host_.logInteger(a0);
                 break;
+            case 8: {
+                std::string text;
+                if (!resolveString(a0, text)) {
+                    return fail("unknown string id", pc);
+                }
+                host_.broadcastLabeledInteger(text, a1);
+                break;
+            }
             default:
                 return fail("unknown host call " + std::to_string(id), pc);
             }

@@ -1,0 +1,106 @@
+ARCANA "bitpack" {
+    ORACLE @on_server_start ~> {
+        BIND($r0) ::= #0;
+        SCRIBE MEM[$r0 + #96] ::= #1330392150;
+        SCRIBE MEM[$r0 + #97] ::= #2;
+        HALT;
+    }
+
+    ORACLE @on_server_stop ~> {
+        BIND($r0) ::= #0;
+        REVEAL($a0) ::= MEM[$r0 + #0];
+        SUMMON(#7);
+        HALT;
+    }
+
+    ORACLE @on_block_break ~> {
+        BIND($r0) ::= #0;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        INCREMENT($r1);
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        BIND($r2) ::= $r1 <&> #15;
+        BIND($r3) ::= #64;
+        BIND($r4) ::= $a0 <&> #255;
+        BIND($r4) ::= $r4 <<> #24;
+        BIND($r5) ::= $a1 <&> #255;
+        BIND($r5) ::= $r5 <<> #16;
+        BIND($r6) ::= $a2 <&> #255;
+        BIND($r6) ::= $r6 <<> #8;
+        BIND($r7) ::= $a3 </> #16;
+        BIND($r7) ::= $r7 <&> #255;
+        BIND($r4) ::= $r4 <|> $r5;
+        BIND($r4) ::= $r4 <|> $r6;
+        BIND($r4) ::= $r4 <|> $r7;
+        SCRIBE MEM[$r3 + $r2] ::= $r4;
+        HALT;
+    }
+
+    ORACLE @on_block_place ~> {
+        BIND($r0) ::= #1;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        INCREMENT($r1);
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        BIND($r2) ::= $r1 <&> #15;
+        BIND($r3) ::= #80;
+        BIND($r4) ::= $a0 <&> #255;
+        BIND($r4) ::= $r4 <<> #24;
+        BIND($r5) ::= $a1 <&> #255;
+        BIND($r5) ::= $r5 <<> #16;
+        BIND($r6) ::= $a2 <&> #255;
+        BIND($r6) ::= $r6 <<> #8;
+        BIND($r7) ::= $a3 </> #16;
+        BIND($r7) ::= $r7 <&> #255;
+        BIND($r4) ::= $r4 <|> $r5;
+        BIND($r4) ::= $r4 <|> $r6;
+        BIND($r4) ::= $r4 <|> $r7;
+        SCRIBE MEM[$r3 + $r2] ::= $r4;
+        HALT;
+    }
+
+    ORACLE @on_item_pickup ~> {
+        BIND($r0) ::= #32;
+        REVEAL($r1) ::= MEM[$r0 + #0];
+        BIND($r1) ::= $r1 <+> $a2;
+        SCRIBE MEM[$r0 + #0] ::= $r1;
+        BIND($r0) ::= #33;
+        SCRIBE MEM[$r0 + #0] ::= $a1;
+        BIND($r2) ::= $a1 <&> #127;
+        BIND($r3) ::= $r2 <>> #6;
+        BIND($r3) ::= $r3 <+> #40;
+        BIND($r4) ::= #1;
+        BIND($r5) ::= $r2 <&> #63;
+        BIND($r4) ::= $r4 <<> $r5;
+        REVEAL($r7) ::= MEM[$r3 + #0];
+        BIND($r7) ::= $r7 <|> $r4;
+        SCRIBE MEM[$r3 + #0] ::= $r7;
+        HALT;
+    }
+
+    ORACLE @on_tick ~> {
+        BIND($r0) ::= $a0 <%> #600;
+        VERIFY($r0) <=> #0;
+        WHEN::NOT_EQUAL => GATE @quiet;
+        BIND($r0) ::= #64;
+        BIND($r1) ::= #0;
+        BIND($r2) ::= #0;
+        @loop::
+        REVEAL($r3) ::= MEM[$r0 + $r1];
+        BIND($r2) ::= $r2 <^> $r3;
+        INCREMENT($r1);
+        VERIFY($r1) <=> #32;
+        WHEN::LESS => GATE @loop;
+        BIND($r0) ::= $r2;
+        POPCOUNT($r0);
+        BIND($a0) ::= SIGIL("&eBitpack checksum bits:");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= $r2;
+        BYTESWAP($r0);
+        BIND($r0) ::= $r0 <&> #65535;
+        BIND($a0) ::= SIGIL("&eBitpack byteswap low:");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        @quiet::
+        HALT;
+    }
+}

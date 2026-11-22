@@ -35,6 +35,7 @@ public:
 private:
     void broadcastInteger(lang::Word value) override;
     void broadcastText(const std::string& text) override;
+    void broadcastLabeledInteger(std::string_view label, lang::Word value) override;
     lang::Word playerCount() override;
     lang::Word currentTimeMs() override;
     lang::Word getBlock(lang::Word x, lang::Word y, lang::Word z) override;

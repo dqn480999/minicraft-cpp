@@ -150,6 +150,10 @@ void ScriptEngine::broadcastText(const std::string& text) {
     server_.broadcastSystem(text);
 }
 
+void ScriptEngine::broadcastLabeledInteger(std::string_view label, lang::Word value) {
+    server_.broadcastSystem(std::string(label) + std::to_string(value));
+}
+
 lang::Word ScriptEngine::playerCount() {
     return static_cast<lang::Word>(server_.players().count());
 }

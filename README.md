@@ -87,7 +87,7 @@ The test profile uses faster hunger/time settings:
 
 ## Scripting
 
-OBLVN is a low-level register language compiled to bytecode and executed by the server core. Scripts in `scripts/*.obl` can handle `on_join`, `on_leave`, `on_chat`, `on_block_break`, `on_block_place`, `on_death`, `on_command` and `on_tick`. They have 16 registers, persistent 4096-cell memory, byte and word memory access, indirect addressing, separate data and call stacks, carry and overflow flags, conditional gates, native calls for chat, player counts, time and block access, and a configurable instruction limit. Operators can hot reload scripts with `/script reload` or dispatch an oracle with `/script run <oracle>`.
+OBLVN is a low-level register language compiled to bytecode and executed by the server core. Scripts in `scripts/*.obl` can handle `on_join`, `on_leave`, `on_chat`, `on_block_break`, `on_block_place`, `on_death`, `on_command`, `on_tick`, `on_server_start`, `on_server_stop`, `on_player_damage`, `on_respawn`, `on_item_pickup` and `on_item_drop`. They have 16 registers, persistent 4096-cell memory, byte and word memory access, indirect addressing, separate data and call stacks, carry and overflow flags, rotates, popcount, leading/trailing zero counts, byte swap, conditional gates, native calls for chat, player counts, time, block access and labeled integer broadcasts, and a configurable instruction limit. Operators can hot reload scripts with `/script reload` or dispatch an oracle with `/script run <oracle>`.
 
 ```obl
 ARCANA "welcome" {
@@ -99,7 +99,7 @@ ARCANA "welcome" {
 }
 ```
 
-The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). A compile-checked syntax showcase is in `scripts/syntax_test.obl`. Disable scripting with `scripts-enabled=false`.
+The syntax reference, instruction set, host calls, event arguments and limits are in [LANGUAGE.md](LANGUAGE.md). The bundled scripts include `welcome.obl`, `stats.obl`, `bitpack.obl`, `bitwise.obl`, `memory_map.obl` and the compile-checked `syntax_test.obl`. Disable scripting with `scripts-enabled=false`.
 
 ## Configuration
 

@@ -1,0 +1,60 @@
+ARCANA "bitwise" {
+    ORACLE @test_bitwise ~> {
+        BIND($r0) ::= #9;
+        POPCOUNT($r0);
+        BIND($a0) ::= SIGIL("pop=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #1;
+        LEADING_ZEROS($r0);
+        BIND($a0) ::= SIGIL("clz=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #8;
+        TRAILING_ZEROS($r0);
+        BIND($a0) ::= SIGIL("ctz=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #255;
+        BYTESWAP($r0);
+        BIND($a0) ::= SIGIL("bswap=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= #1;
+        BIND($r0) ::= $r0 <rol> #63;
+        BIND($a0) ::= SIGIL("rol=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        BIND($r0) ::= $r0 <ror> #63;
+        BIND($a0) ::= SIGIL("ror=");
+        BIND($a1) ::= $r0;
+        SUMMON(#8);
+        RETURN;
+    }
+
+    ORACLE @test_bitfields ~> {
+        BIND($r0) ::= #0;
+        SCRIBE MEM[$r0 + #0] ::= #0;
+        BIND($r1) ::= #5;
+        BIND($r2) ::= #1;
+        BIND($r2) ::= $r2 <<> $r1;
+        REVEAL($r3) ::= MEM[$r0 + #0];
+        BIND($r3) ::= $r3 <|> $r2;
+        SCRIBE MEM[$r0 + #0] ::= $r3;
+        REVEAL($r4) ::= MEM[$r0 + #0];
+        BIND($r5) ::= $r4 <&> $r2;
+        VERIFY($r5) <=> #0;
+        WHEN::EQUAL => GATE @not_set;
+        BIND($a0) ::= SIGIL("bit set");
+        SUMMON(#2);
+        @not_set::
+        COMPLEMENT($r2);
+        BIND($r4) ::= $r4 <&> $r2;
+        SCRIBE MEM[$r0 + #0] ::= $r4;
+        BIND($r2) ::= #1;
+        BIND($r2) ::= $r2 <<> $r1;
+        BIND($r4) ::= $r4 <^> $r2;
+        SCRIBE MEM[$r0 + #0] ::= $r4;
+        HALT;
+    }
+}

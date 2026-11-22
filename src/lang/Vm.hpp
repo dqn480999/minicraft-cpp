@@ -15,6 +15,7 @@ public:
     virtual ~ScriptHost() = default;
     virtual void broadcastInteger(Word value) = 0;
     virtual void broadcastText(const std::string& text) = 0;
+    virtual void broadcastLabeledInteger(std::string_view label, Word value) = 0;
     virtual Word playerCount() = 0;
     virtual Word currentTimeMs() = 0;
     virtual Word getBlock(Word x, Word y, Word z) = 0;

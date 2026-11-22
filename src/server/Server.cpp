@@ -568,6 +568,7 @@ bool Server::start() {
         if (!scriptEngine_.loadDirectory(config_.scriptDir)) {
             Log::warn("script loading completed with errors");
         }
+        scriptEngine_.fire("on_server_start");
     }
 
     tickRunning_.store(true, std::memory_order_release);
@@ -629,6 +630,7 @@ void Server::stop() {
     if (tickThread_.joinable()) {
         tickThread_.join();
     }
+    scriptEngine_.fire("on_server_stop");
     authPool_.stop();
     net_.stop();
     world_.save();
@@ -1084,9 +1086,16 @@ void Server::tickLoop() {
 }
 
 void Server::updateItems() {
+    struct PickupEvent {
+        std::int32_t player{0};
+        std::int32_t itemId{0};
+        std::int32_t count{0};
+        std::int32_t damage{0};
+    };
     std::vector<ItemEntity> updates;
     std::vector<std::int32_t> destroyed;
     std::vector<std::pair<std::int32_t, std::int32_t>> collected;
+    std::vector<PickupEvent> pickupEvents;
     std::vector<ItemEntity> metadataUpdates;
     std::vector<std::shared_ptr<Connection>> equipmentUpdates;
     const auto players = players_.snapshot();
@@ -1166,11 +1175,15 @@ void Server::updateItems() {
                         equipmentUpdates.push_back(collector);
                     }
                     if (remaining == 0) {
+                        pickupEvents.push_back(PickupEvent{
+                            collector->entityId(), it->itemId, original, it->damage});
                         collected.emplace_back(it->entityId, collector->entityId());
                         it = items_.erase(it);
                         continue;
                     }
                     if (remaining != original) {
+                        pickupEvents.push_back(PickupEvent{
+                            collector->entityId(), it->itemId, original - remaining, it->damage});
                         it->count = static_cast<i8>(remaining);
                         it->pickupAt = now + std::chrono::milliseconds(200);
                         metadataUpdates.push_back(*it);
@@ -1216,6 +1229,10 @@ void Server::updateItems() {
         if (player && updated.insert(player->entityId()).second) {
             broadcastEquipment(player);
         }
+    }
+    for (const auto& pickup : pickupEvents) {
+        scriptEngine_.fire("on_item_pickup",
+                           {pickup.player, pickup.itemId, pickup.count, pickup.damage});
     }
 }
 
@@ -2056,6 +2073,8 @@ void Server::dropItem(Connection& connection, const ItemStack& stack) {
                     -std::sin(yaw) * horizontal,
                     -std::sin(pitch) * 0.3 + 0.1,
                     std::cos(yaw) * horizontal);
+    scriptEngine_.fire("on_item_drop",
+                       {connection.entityId(), stack.id, stack.count, stack.damage});
 }
 
 void Server::dropCursor(Connection& connection, bool dropAll) {
@@ -2669,6 +2688,9 @@ void Server::applyDamage(Connection& connection, float amount) {
     const float newHealth = std::max(0.0F, connection.health() - amount);
     connection.setHealth(newHealth);
     sendHealth(connection);
+    scriptEngine_.fire("on_player_damage",
+                       {connection.entityId(), static_cast<std::int64_t>(amount),
+                        static_cast<std::int64_t>(newHealth)});
     if (newHealth > 0.0F) {
         return;
     }
@@ -2742,6 +2764,7 @@ void Server::handleRespawn(Connection& connection) {
     sendActiveItems(connection);
     sendActiveFallingBlocks(connection);
     sendActiveMobs(connection);
+    scriptEngine_.fire("on_respawn", {connection.entityId()});
 }
 
 void Server::updateSurvival(Connection& connection) {
