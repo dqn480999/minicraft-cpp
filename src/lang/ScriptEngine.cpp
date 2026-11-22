@@ -107,6 +107,13 @@ bool ScriptEngine::reload(const std::string& directory) {
     return loadDirectory(directory);
 }
 
+void ScriptEngine::clear() {
+    std::lock_guard lock(mutex_);
+    programs_.clear();
+    memories_.clear();
+    functionCount_ = 0;
+}
+
 void ScriptEngine::fire(const std::string& event,
                         const std::vector<lang::Word>& arguments,
                         const std::vector<std::string>& runtimeStrings) {

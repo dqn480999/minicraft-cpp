@@ -26,6 +26,7 @@ public:
 
     bool loadDirectory(const std::string& directory);
     bool reload(const std::string& directory);
+    void clear();
     void fire(const std::string& event,
               const std::vector<lang::Word>& arguments = {},
               const std::vector<std::string>& runtimeStrings = {});

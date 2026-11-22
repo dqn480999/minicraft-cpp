@@ -660,6 +660,10 @@ ScriptEngine& Server::scripts() {
 }
 
 bool Server::reloadScripts() {
+    if (!config_.scriptsEnabled) {
+        scriptEngine_.clear();
+        return true;
+    }
     return scriptEngine_.reload(config_.scriptDir);
 }
 
